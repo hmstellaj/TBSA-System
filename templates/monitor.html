@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Integrated Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* ✅ 자동 줄이기 */
+        :root {
+            --scale: 1;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        body {
+            transform-origin: top left;
+            transform: scale(var(--scale));
+            font-size: clamp(11px, 1.2vw, 15px);
+        }
+        
+        @media (max-width: 1920px) {
+            :root { --scale: 0.95; }
+        }
+        @media (max-width: 1600px) {
+            :root { --scale: 0.85; }
+        }
+        @media (max-width: 1400px) {
+            :root { --scale: 0.75; }
+        }
+        @media (max-width: 1200px) {
+            :root { --scale: 0.65; }
+        }
+
+        /* ✅ 최종 레이아웃: 메인 + 우측 로그 */
+        .nav-container-final {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 10px;
+            height: 100%;
+        }
+
+        .nav-main-section {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .main-card-v2 {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .main-card-v2 .title {
+            flex-shrink: 0;
+            margin-bottom: 10px;
+        }
+
+        .path-canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #pathCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+
+        .nav-right-section {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .log-card-v2 {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .log-card-v2 .title {
+            flex-shrink: 0;
+            margin-bottom: 10px;
+        }
+
+        #driving-log {
+            flex: 1;
+            overflow-y: auto;
+            background: #0a0a0a;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="msg-banner">연결 중...</div>
+    
+    <div class="seq-selector">
+        <label>📺 현재 모드:</label>
+        <span id="current-seq-display" class="seq-display">SEQ 1</span>
+        <div id="combat-mode-display" class="combat-mode-info" style="display: none;">
+            <span id="combat-mode-badge" class="mode-badge mode-scan">SCAN</span>
+            <span id="action-status-text" style="color: #ffc107; font-size: 0.95em; font-weight: bold; border-left: 2px solid #444; padding-left: 10px;">
+            방향 선택 대기 중...
+            </span>
+        </div>
+    </div>
+    
+    <div id="position-panel" class="position-panel">
+        <div class="pos-card current"><div class="pos-label">현재</div><div class="pos-value" id="current-pos">-</div></div>
+        <div class="pos-card dest"><div class="pos-label">목적지</div><div class="pos-value" id="destination-pos">-</div></div>
+        <div class="pos-card path"><div class="pos-label">경로</div><div class="pos-value" id="path-nodes">-</div></div>
+    </div>
+    
+    <div id="destination-input" class="destination-panel">
+        <label style="font-weight: bold; color: #4CAF50;">🎯 이동:</label>
+        <input type="text" id="dest-input" placeholder="x, z" style="padding: 8px; border: 1px solid #444; border-radius: 5px; background: #1a1a1a; color: #fff; width: 100px;">
+        <button onclick="setDestination()" class="set-dest-btn">설정</button>
+        <div style="height: 24px; width: 1px; background: #444; margin: 0 5px;"></div>
+        <button onclick="setQuickDest(160, 190)" class="quick-btn">📍 정찰지</button>
+        <button onclick="setQuickDest(49, 236)" class="quick-btn">📍 경유지</button>
+        <button onclick="setQuickDest(65, 30)" class="quick-btn">📍 아군 캠프</button>
+        <span id="dest-status" style="margin-left: auto; font-size: 0.85em;"></span>
+    </div>
+    
+    <!-- 메인(실시간 경로 이미지) + 우측 로그 -->
+    <div id="navigation-layout" class="layout-content">
+        <div class="nav-container-final">
+            <!-- 메인 영역: 서버에서 생성한 실시간 경로 이미지 -->
+            <div class="nav-main-section">
+                <div class="card main-card-v2">
+                    <div class="title" style="display: flex; align-items: center; gap: 10px;">
+                        <span>🚗 실시간 경로 추적</span>
+                        <span id="path-node-info" style="color: #88ff88; font-size: 0.85em; margin-left: auto;">-/-</span>
+                    </div>
+                    
+                    <div class="path-canvas-container">
+                        <img id="realtimePathImage" 
+                             src="/realtime_path_image?width=640&height=640" 
+                             alt="실시간 경로" 
+                             style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 5px;">
+                        
+                        <img id="staticPathPip" 
+                             class="pip-overlay" 
+                             src="" 
+                             alt="Global Path Map" 
+                             style="display: none;"> </div>
+                </div>
+            </div>
+
+            <!-- 우측 영역: 로그 -->
+            <div class="nav-right-section">
+                <div class="card log-card-v2">
+                    <div class="title">📋 주행 로그</div>
+                    <pre id="driving-log"></pre> 
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- SEQ 2 -->
+    <div id="combat-layout" class="layout-content">
+        <div class="combat-container">
+            <div class="card combat-overlay-card">
+                <div class="title">🎯 Sensor Fusion Overlay</div>
+                <img id="combat-overlay" src="/overlay/left">
+            </div>
+            <div class="combat-sidebar">
+
+                <div class="card" id="scan-direction-card">
+                    <div class="title">📡 SCAN 탐색 방향</div>
+                    <div id="scan-direction-panel" style="padding: 5px;">
+                        <div style="display: flex; gap: 5px;">
+                            <button id="scan-q-btn" onclick="setScanDir('Q')" class="action-btn" style="flex: 1;">⬅️ 좌측 (Q)</button>
+                            <button id="scan-e-btn" onclick="setScanDir('E')" class="action-btn" style="flex: 1;">➡️ 우측 (E)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="flex: 1; min-height: 150px;">
+                    <div class="title">☑️ 탐지된 객체 <span id="target-count" style="color:#888;">(0)</span></div>
+                    <div class="target-list" id="target-list"></div>
+                </div>
+
+                <div class="card" id="locked-target-card" style="background: #1a1a1a; border-color: #333;">
+                    <div class="title">🔒 선정 타겟</div>
+                    <div style="font-size:0.85em; display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                        <span style="color:#888;">Dist:</span><span id="lock-distance" style="color:#0f0;">-</span>
+                        <span style="color:#888;">Yaw:</span><span id="lock-yaw" style="color:#0f0;">-</span>
+                        <span style="color:#888;">Conf:</span><span id="lock-conf" style="color:#0f0;">-</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="title">⚔️ 선택 액션</div>
+                    <div class="action-buttons-grid">
+                        <button id="standby-btn" class="action-btn standby-btn" onclick="setSeq2Mode('STANDBY')">🎯 공격 대기</button>
+                        <button id="rescan-btn" class="action-btn rescan-btn" onclick="handleRescan()">🔄 재탐색</button>
+                        <button id="retreat-btn" class="action-btn retreat-btn" onclick="sendCombatAction('RETREAT')">🚗 후퇴</button>
+                        <button id="fire-btn" class="action-btn fire-btn" onclick="sendCombatAction('FIRE')" disabled>🔥 사격</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEQ 4 -->
+    <div id="autonomous-layout" class="layout-content">
+        <div class="auto-grid">
+            <div class="card"><div class="title">🔍 자율주행 실시간 디버깅</div><img id="autonomous-view" src="/view_autonomous" alt="Autonomous View" style="width: 100%; border: 1px solid #ccc; background-color: #f0f0f0;"></div>
+            <div class="card"><div class="title">🗺️ Global Accumulated Map</div><img id="autonomous-costmap-global" src="/view_autonomous"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
