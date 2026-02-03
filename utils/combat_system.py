@@ -1,5 +1,6 @@
 """
 combat_system.py - SEQ 2 전투 시스템 핵심 로직
+2026년 2월 3일 수정
 
 [모듈 구조]
 ├── 1. 기본 유틸리티 (Basic Utilities)
