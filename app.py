@@ -422,6 +422,7 @@ def handle_standby_mode(image_path, img_pil, state_manager, now):
             "category": best.get("category", "tank"),
             "displayName": best.get("className", "Tank [TARGET]"),
             "distance_m": best.get("distance_m"),
+            "position": best.get("position"), #<- 함수 내부에서 값을 가져옴
             "point_count": best.get("point_count", 0),
             "yaw_error_deg": aim_errors.get("yaw_error_deg"),
             "yaw_base": aim_errors.get("yaw_base"),
@@ -432,7 +433,7 @@ def handle_standby_mode(image_path, img_pil, state_manager, now):
             "confidence": best.get("confidence", 0.0),
             "lidar_yaw": aim_errors.get("yaw_base"),
             "lidar_pitch": aim_errors.get("pitch_base"),
-            "track_id": best.get("track_id"),
+            "track_id": best.get("track_id")
         }
         state_manager.last_target_ts = now
         state_manager.last_detected_distance = best.get("distance_m")
