@@ -1,6 +1,5 @@
 """
 combat_system.py - SEQ 2 전투 시스템 핵심 로직
-2026년 2월 3일 수정
 
 [모듈 구조]
 ├── 1. 기본 유틸리티 (Basic Utilities)
@@ -377,12 +376,12 @@ def make_det_overlay_bytes(img_pil: Image.Image, dets: list, target_bbox=None, t
     img = img_pil.copy()
     draw = ImageDraw.Draw(img, "RGBA")
 
-    # [추가] 폰트 로드 (설정된 크기 사용)
+    # 폰트 로드 (설정된 크기 사용)
     try:
         # 윈도우/리눅스 환경에 따라 폰트 경로가 다를 수 있음. 기본 폰트나 시스템 폰트 활용
         font = ImageFont.truetype(combat_config.overlay_font_path, combat_config.overlay_font_size)
     except IOError:
-        # 폰트 파일이 없으면 기본 폰트 사용 (크기 조절 불가능할 수 있음)
+        # 폰트 파일이 없으면 기본 폰트 사용
         font = ImageFont.load_default()
 
     for d in dets:
@@ -415,6 +414,7 @@ def make_det_overlay_bytes(img_pil: Image.Image, dets: list, target_bbox=None, t
         
         # 텍스트 쓰기 (흰색)
         draw.text((text_origin[0] + 2, text_origin[1] + 2), label, fill=(255, 255, 255), font=font)
+        
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
