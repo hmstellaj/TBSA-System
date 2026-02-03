@@ -633,8 +633,12 @@ def get_action():
             state_manager.seq = new_seq
             state_manager.combat_mode = "SCAN"
             state_manager.fire_ready = False
-            print(f"🔄 [AUTO] SEQ 2 → SEQ {new_seq} 자동 전환")
-        
+
+            if new_seq == 3:
+                state_manager.destination = (49, 236)
+                state_manager.clear_path()
+                state_manager.set_log("[AUTO] 사전 저장된 경유지 좌표로 이동")
+
         return jsonify(command)
     
     # SEQ 1, 3, 4: 주행 시스템

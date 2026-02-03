@@ -168,7 +168,15 @@ function refresh() {
         // SEQ 상태 표시 업데이트
         const seqDisplay = document.getElementById('current-seq-display');
         if (seqDisplay) {
-            seqDisplay.textContent = `SEQ ${serverSeq}`;
+            if (serverSeq === 1){
+                seqDisplay.textContent = '정찰지 이동';
+            } else if (serverSeq === 2){
+                seqDisplay.textContent = '전장 상황 인식';
+            } else if (serverSeq === 3){
+                seqDisplay.textContent = '경유지 이동';
+            } else {
+                seqDisplay.textContent = '베이스캠프로 복귀';
+            }
             seqDisplay.className = `seq-display seq-${serverSeq}`;
         }
         

@@ -109,7 +109,7 @@ class HybridController:
             cmd = self._stop_command()
             cmd["fire"] = True
             self.state.seq = 3
-            self.state.status_message = "🔥 사격 완료! 다음 목적지를 선택하세요 (SEQ 3)"
+            self.state.status_message = "🔥 사격 완료! 경유지로 출발"
             return cmd
 
         # 3. 목적지 없으면 정지
@@ -230,10 +230,13 @@ class HybridController:
         if self.state.seq == 1:
             forbidden_zone = ObstacleRect.from_min_max(158.0, 190.0, 115.0, 156.0)
             mask_zones.append(forbidden_zone)
+            self.state.set_log(f"🚫 마스킹 영역(No-Go Zone) {len(mask_zones)}개 설정 완료")
             self.planner.update_grid_range(65.0, 200.0, 0.0, 220.0)
+            self.state.set_log(f"📏 A* 범위 변경 완료: X(65.0~200.0), Z(0.0~220.0)")
 
         elif self.state.seq == 3:
             self.planner.update_grid_range(0.0, 200.0, 150.0, 300.0)
+            self.state.set_log(f"📏 A* 범위 변경 완료: X(0.0~200.0), Z(150.0~300.0)")
         
         self.planner.set_mask_zones(mask_zones)
         
