@@ -247,6 +247,12 @@ def get_distance_for_bboxes(
             det["distance_m"] = round(dist_est, 2)
             det["aim_uv"] = [int(target_uv[0]), int(target_uv[1])]
             det["matched_xyz"] = matched_xyz_list  # ← XYZ 정보 저장
+            # 포격 타겟 확정 로그의 좌표를 담기 위해서 추가 
+            det["position"] = {
+            "x": round(float(target_xyz[0]), 2),
+            "y": round(float(target_xyz[1]), 2),
+            "z": round(float(target_xyz[2]), 2)
+            }
         else:
             det["distance_m"] = None
             det["aim_uv"] = None

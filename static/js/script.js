@@ -340,6 +340,14 @@ function refresh() {
             if (lockedTarget) {
                 document.getElementById('lock-distance').textContent = 
                     lockedTarget.distance_m ? `${lockedTarget.distance_m.toFixed(1)}m` : '-';
+                    // ✅ 추가: 전달받은 정밀 좌표(XYZ) 출력
+                if (lockedTarget.position) {
+                    const {x, y, z} = lockedTarget.position;
+                    document.getElementById('lock-pos').textContent = `(${x}, ${y}, ${z})`;
+                } else {
+                    document.getElementById('lock-pos').textContent = '-';
+                }
+
                 document.getElementById('lock-yaw').textContent = 
                     lockedTarget.yaw_error_deg !== undefined ? `${lockedTarget.yaw_error_deg.toFixed(1)}°` : '-';
                 document.getElementById('lock-conf').textContent = 
