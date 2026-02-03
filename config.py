@@ -30,9 +30,10 @@
 """
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Optional
-
+import platform
 
 # ==============================================================================
 # 시스템 전체 설정
@@ -50,10 +51,33 @@ class Config:
     # ========================================
     class Lidar:
         """LiDAR 센서 관련 설정"""
-        
+
         # LiDAR 데이터 폴더 경로
-        # LIDAR_FOLDER = r"C:\Users\acorn\Documents\Tank Challenge\lidar_data"
-        LIDAR_FOLDER = r"C:\Users\soeao\OneDrive\문서\Tank Challenge\lidar_data"
+        def _set_lidar_folder(user :str = "acorn"):
+            os_name = platform.system()
+
+            # 탐색할 하위 경로 후보들 (중요도 순서대로)
+            sub_path_candidates = [
+                ["OneDrive", "문서", "Tank Challenge", "lidar_data"],
+                ["OneDrive", "Documents", "Tank Challenge", "lidar_data"],
+                ["Documents", "Tank Challenge", "lidar_data"],
+                ["문서", "Tank Challenge", "lidar_data"],
+                ["My documents", "Tank Challenge", 'lidar_data']
+            ]
+
+            if os_name == "Windows":
+                base_path = f"C:\\Users\\{user}"
+            else:
+                base_path = f"/mnt/c/Users/{user}"
+
+            for sub in sub_path_candidates:
+                full_path = os.path.join(base_path, *sub)
+                if os.path.exists(full_path): return full_path
+            
+            print("LiDAR 폴더 설정 완료!")
+
+        # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
+        LIDAR_FOLDER = _set_lidar_folder(user="MSI")
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -65,7 +89,8 @@ class Config:
         
         # 그리드 설정
         GRID_SIZE = 1
-    
+
+
     # ========================================
     # 지형 필터링 + Costmap 생성 설정
     # ========================================
