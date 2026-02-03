@@ -251,7 +251,11 @@ class HybridController:
             # 경로 이미지 저장
             try:
                 obs_count = len(self.planner._obstacles) if self.planner._obstacles else 0
-                mode_label = f"A* + PID (SEQ {self.state.seq})"
+                mode_label = ""
+                if self.state.seq == 1:
+                    mode_label = "정찰지 (RP1) 이동 (A* + PID)"
+                elif self.state.seq == 3:
+                    mode_label = "경유지 (RP2) 이동 (A* + PID)"
                 
                 save_path_image(
                     planner=self.planner,
@@ -259,7 +263,7 @@ class HybridController:
                     current_pos=(curr_x, curr_z),
                     current_yaw=self.state.robot_yaw_deg,
                     filename=f"SEQ {self.state.seq}_Global_Path.png",
-                    title=f"SEQ {self.state.seq} - {mode_label}",
+                    title=f"{mode_label}",
                     state_manager=self.state
                 )
                 self.state.set_log(f"💾 경로 이미지 저장 완료!")
