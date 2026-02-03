@@ -486,9 +486,9 @@ class StateMachineConfig:
     """SEQ 2 전투 모드 State Machine 설정"""
     
     # SCAN 모드 설정
-    scan_turret_speed: float = 0.07    # 터렛 회전 속도 (가중치)
+    scan_turret_speed: float = 0.01    # 터렛 회전 속도 (가중치)
     scan_direction: str = "E"          # 초기 스캔 방향 (E=우측, Q=좌측)
-    scan_hold_sec: float = 4.0         # 스캔 유지 시간 (초)
+    scan_hold_sec: float = 6.0         # 스캔 유지 시간 (초)
     lowering_sec: float = 2.5
     
     # STANDBY 모드 설정
