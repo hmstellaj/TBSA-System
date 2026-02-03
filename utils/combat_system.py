@@ -38,10 +38,10 @@ import threading
 import numpy as np
 from typing import List, Dict, Tuple, Optional
 from collections import deque
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from config import (
-    pitch_cfg, smooth_cfg, fusion_cfg, aim_cfg,
+    pitch_cfg, smooth_cfg, fusion_cfg, aim_cfg, combat_config,
     turret_cfg, offset_cfg, lock_cfg, camera_cfg ,precision_cfg
 )
 
@@ -178,6 +178,38 @@ def detect_all_objects_dual(
     tank_count = 0
     red_count = 0
     last_cannon_bbox = None
+# ═══════════════════════════════════════════════════════════════
+    # 🎨 bbox 오버레이 커스터마이징 설정
+    # ═══════════════════════════════════════════════════════════════
+    bbox_styles = {
+        "Tank": {
+            "color": "#FF0000",      # 빨간색
+            "filled": True,          # 반투명 채우기
+            "show_confidence": True, # 신뢰도 표시
+        },
+        "Red": {
+            "color": "#FF4444",      # 밝은 빨간색
+            "filled": True,
+            "show_confidence": True,
+        },
+        "Tree": {
+            "color": "#AAAAAA",      # 회색
+            "filled": True,         # 테두리만
+            "show_confidence": False,
+        },
+        "Rock": {
+            "color": "#AAAAAA",      # 회색
+            "filled": True,
+            "show_confidence": False,
+        },
+        "default": {
+            "color": "#FFFFFF",      # 흰색 (기본값)
+            "filled": True,
+            "show_confidence": False,
+        }
+    }
+
+
 
     for det in final_detections:
         name = det["class_name"]
@@ -191,13 +223,17 @@ def detect_all_objects_dual(
             last_cannon_bbox = det["bbox"]
             continue  # Cannon은 그리지 않음
 
+
+        # 스타일 가져오기
+        style = bbox_styles.get(name, bbox_styles["default"])
+
         filtered_results.append({
-            "className": f"{name}",
+            "className": name,              # 이름만 표시
             "category": name.lower(),
             "bbox": det["bbox"],
             "confidence": conf,
-            "color": det["color"],
-            "filled": False,
+            "color": style["color"],
+            "filled": style["filled"],
             "updateBoxWhileMoving": False,
         })
 
@@ -341,20 +377,44 @@ def make_det_overlay_bytes(img_pil: Image.Image, dets: list, target_bbox=None, t
     img = img_pil.copy()
     draw = ImageDraw.Draw(img, "RGBA")
 
+    # [추가] 폰트 로드 (설정된 크기 사용)
+    try:
+        # 윈도우/리눅스 환경에 따라 폰트 경로가 다를 수 있음. 기본 폰트나 시스템 폰트 활용
+        font = ImageFont.truetype(combat_config.overlay_font_path, combat_config.overlay_font_size)
+    except IOError:
+        # 폰트 파일이 없으면 기본 폰트 사용 (크기 조절 불가능할 수 있음)
+        font = ImageFont.load_default()
+
     for d in dets:
         xmin, ymin, xmax, ymax = d["bbox"]
         rgb = hex_to_rgb(d.get("color", "#FFFFFF"), default=(255, 255, 255))
 
         # 타겟 박스는 더 두껍게/채우기
         is_target = (target_bbox is not None and _iou(d["bbox"], target_bbox) > target_iou_th)
-        width = 5 if is_target else 2
+        width = 8 if is_target else 2
         fill = (rgb[0], rgb[1], rgb[2], 70) if is_target else None
 
         if fill is not None:
             draw.rectangle([xmin, ymin, xmax, ymax], outline=rgb, width=width, fill=fill)
         else:
             draw.rectangle([xmin, ymin, xmax, ymax], outline=rgb, width=width)
-
+        label = d.get("className", d.get("class_name", "Unknown"))
+        # 텍스트 배경 (가독성 확보)
+        text_bbox = draw.textbbox((xmin, ymin), label, font=font)
+        text_w = text_bbox[2] - text_bbox[0]
+        text_h = text_bbox[3] - text_bbox[1]
+        
+        # 텍스트가 박스 위에 위치하도록 조정
+        text_origin = (xmin, max(0, ymin - text_h - 4))
+        
+        # 텍스트 배경 사각형 (색상과 동일하게, 반투명)
+        draw.rectangle(
+            [text_origin[0], text_origin[1], text_origin[0] + text_w + 4, text_origin[1] + text_h + 4],
+            fill=(rgb[0], rgb[1], rgb[2], 180) 
+        )
+        
+        # 텍스트 쓰기 (흰색)
+        draw.text((text_origin[0] + 2, text_origin[1] + 2), label, fill=(255, 255, 255), font=font)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)

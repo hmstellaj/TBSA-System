@@ -553,12 +553,12 @@ class CombatSystemConfig:
         0: "Cannon"
     })
     map_integrated: dict = field(default_factory=lambda: {
-        0: "Mine",
+        #0: "Mine",
         1: "Red",
         2: "Rock",
         3: "Tank",
         4: "Tree",
-    })
+        })
     
     # 듀얼 모델 색상 설정
     color_cannon: str = "#00FF00"      # 녹색
@@ -568,6 +568,10 @@ class CombatSystemConfig:
     target_position_tank_threshold: int = 2
     target_position_red_threshold: int = 3
     target_position_message_duration: float = 3.0  # 초
+
+    # [추가] 오버레이 폰트 설정
+    overlay_font_size: int = 20      # 폰트 크기 (작게 설정)
+    overlay_font_path: str = "arial.ttf" # 폰트 파일 경로 (시스템에 맞는 폰트 사용)
 
 @dataclass 
 class PrecisionAttackConfig:
