@@ -340,25 +340,22 @@ function refresh() {
             if (lockedTarget) {
                 document.getElementById('lock-distance').textContent = 
                     lockedTarget.distance_m ? `${lockedTarget.distance_m.toFixed(1)}m` : '-';
-                    // ✅ 추가: 전달받은 정밀 좌표(XYZ) 출력
+                    // 전달받은 정밀 좌표(XYZ) 출력
                 if (lockedTarget.position) {
                     const {x, y, z} = lockedTarget.position;
-                    document.getElementById('lock-pos').textContent = `(${x}, ${y}, ${z})`;
+                    document.getElementById('lock-pos').textContent = `X:${x}, Y:${y}, Z:${z}`;
                 } else {
                     document.getElementById('lock-pos').textContent = '-';
                 }
 
                 document.getElementById('lock-yaw').textContent = 
                     lockedTarget.yaw_error_deg !== undefined ? `${lockedTarget.yaw_error_deg.toFixed(1)}°` : '-';
-                document.getElementById('lock-conf').textContent = 
-                    lockedTarget.confidence ? `${(lockedTarget.confidence * 100).toFixed(0)}%` : '-';
                 
                 // 락된 타겟 카드 하이라이트
                 document.getElementById('locked-target-card').style.borderColor = '#d16666';
             } else {
                 document.getElementById('lock-distance').textContent = '-';
                 document.getElementById('lock-yaw').textContent = '-';
-                document.getElementById('lock-conf').textContent = '-';
                 document.getElementById('locked-target-card').style.borderColor = '#333';
             }
             
