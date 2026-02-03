@@ -109,7 +109,7 @@ class HybridController:
             cmd = self._stop_command()
             cmd["fire"] = True
             self.state.seq = 3
-            self.state.status_message = "🔥 사격 완료! 다음 목적지를 선택하세요 (SEQ 3)"
+            self.state.status_message = "🔥 사격 완료! 경유지로 출발"
             return cmd
 
         # 3. 목적지 없으면 정지
