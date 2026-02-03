@@ -269,7 +269,7 @@ class VisualizationManager:
                 ax.arrow(cx, cz, dx, dz, head_width=2, head_length=2, 
                         fc='lime', ec='green', zorder=6)
             
-            # ✅ 2번 개선: 목적지를 검정색 깃발로 표시 (전체 경로 이미지용)
+            # 목적지를 검정색 깃발로 표시 (전체 경로 이미지용)
             if self.state.destination:
                 dest_x, dest_z = self.state.destination[0], self.state.destination[1]
                 
@@ -305,7 +305,7 @@ class VisualizationManager:
 
             # 시각적 밀도 강화
             ax.set_aspect('equal')  # 비율 유지
-            ax.set_title(f'SEQ {self.state.seq} - 실시간 경로 추적', fontsize=12)
+            ax.set_title(f'실시간 경로 추적', fontsize=12)
             ax.legend(loc='upper right', fontsize=8)
             
             # 버퍼 저장 및 반환
@@ -433,7 +433,7 @@ class VisualizationManager:
             # ═══════════════════════════════════════════════════════════════
             # 5. 현재 전차 위치 (빨간색 갈매기 화살표)
             # ═══════════════════════════════════════════════════════════════
-            yaw_rad = np.radians(self.state.robot_yaw_deg) if self.state.robot_yaw_deg is not None else 0
+            yaw_rad = np.radians(self.state.player_body_x) if self.state.player_body_x is not None else 0
             
             # 화살표 크기 대폭 키움 (고정 크기 12m) -> 맵에서 확실히 보임
             arrow_size = 12.0  
@@ -510,7 +510,7 @@ class VisualizationManager:
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             
             # 타이틀
-            ax.set_title(f'SEQ {self.state.seq} - 실시간 경로 추적 [{timestamp}]', 
+            ax.set_title(f'실시간 경로 추적 [{timestamp}]', 
                         fontsize=11, fontweight='bold', pad=10)
             
             # 범례 (좌측 상단)
@@ -582,9 +582,9 @@ class VisualizationManager:
             # 3. 경로 노드 표시 (작은 점)
             ax.scatter(path_x, path_z, c='blue', s=10, alpha=0.4, zorder=3)
             
-            # ✅ 2번 개선: 현재 위치 아이콘을 갈매기 화살표로 변경 (회전 가능)
-            if self.state.robot_yaw_deg is not None:
-                yaw_rad = np.radians(self.state.robot_yaw_deg)
+            # 현재 위치 아이콘을 갈매기 화살표로 변경 (회전 가능)
+            if self.state.player_body_x is not None:
+                yaw_rad = np.radians(self.state.player_body_x)
                 # 갈매기 화살표 좌표 계산 (로봇 회전에 따라 회전)
                 arrow_size = 5.0
                 # 기본 갈매기 모양: 중앙, 좌상단, 우상단
@@ -611,7 +611,7 @@ class VisualizationManager:
                 ax.plot(cx, cz, 'r^', markersize=12, label='로봇', zorder=5,
                        markeredgecolor='darkred', markeredgewidth=2)
             
-            # ✅ 2번 개선: 목적지를 검정색 깃발로 표시
+            # 목적지를 검정색 깃발로 표시
             if self.state.destination:
                 # 검정색 깃발 모양 (깃발 + 기둥)
                 dest_x, dest_z = self.state.destination[0], self.state.destination[1]
@@ -631,7 +631,7 @@ class VisualizationManager:
                               zorder=4, edgecolor='darkgray', linewidth=1)
                 ax.add_patch(flag)
                 
-                ax.plot(dest_x, dest_z, 'k*', markersize=18, label='목적지(깃발)', zorder=4)
+                # ax.plot(dest_x, dest_z, 'k*', markersize=18, label='목적지(깃발)', zorder=4)
                 
                 # 목적지까지 거리 표시
                 dist = np.hypot(self.state.destination[0] - cx, 
