@@ -77,7 +77,7 @@ class Config:
             print("LiDAR 폴더 설정 완료!")
 
         # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
-        LIDAR_FOLDER = _set_lidar_folder(user="MSI")
+        LIDAR_FOLDER = _set_lidar_folder(user="soeao")
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -424,7 +424,7 @@ class FusionConfig:
     min_fire_conf: float = 0.40        # 최소 발사 신뢰도
     min_box_w: int = 10                # 최소 박스 너비 (픽셀)
     min_box_h: int = 10                # 최소 박스 높이 (픽셀)
-    min_height_threshold: float = 10.0  # 높이 기반 필터링 임계값 (m)
+    min_height_threshold: float = 5.0  # 높이 기반 필터링 임계값 (m)
     screen_margin: int = 200           # 화면 경계 마진 (픽셀)
 
 @dataclass
