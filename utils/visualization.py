@@ -2,6 +2,7 @@
 시각화 관리 및 경로 저장 유틸리티
 """
 import io
+import platform
 import numpy as np
 import time
 import threading
@@ -10,12 +11,23 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# Windows 기준 '맑은 고딕' 설정 (리눅스는 'NanumGothic' 등 설치된 폰트명 사용)
-plt.rcParams['font.family'] = 'NanumGothic'
-plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
+# OS별 자동 폰트 설정 코드
+def set_korean_font():
+    os_name = platform.system()
+
+    if os_name == "Windows":
+        plt.rcParams['font.family'] = 'Malgun Gothic'
+    elif os_name == "Linux":
+        # sudo apt-get install -y fonts-nanum 으로 설치되어져 있어야 함
+        plt.rcParams['font.family'] = 'NanumGothic'
+    
+    plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
+    print(f"현재 운영체제: {os_name}, 설정된 폰트: {plt.rcParams['font.family'][0]}")
+
+set_korean_font()
 
 # ---------------------------------------------------------
-# [추가] 경로 이미지 저장 함수 (HybridController에서 호출용)
+# 경로 이미지 저장 함수 (HybridController에서 호출용)
 # ---------------------------------------------------------
 def save_path_image(planner, path, current_pos, current_yaw, filename="path_debug.png", title="Path", show_grid=False, state_manager=None):
     """경로 이미지 저장 (AStarPlanner.plot 기능 활용) - DWA trajectory 포함"""
