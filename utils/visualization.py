@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Windows 기준 '맑은 고딕' 설정 (리눅스는 'NanumGothic' 등 설치된 폰트명 사용)
-plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['font.family'] = 'NanumGothic'
 plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
 
 # ---------------------------------------------------------
