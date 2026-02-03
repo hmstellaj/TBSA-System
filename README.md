@@ -1,15 +1,17 @@
 # TBSA-System
-TBSA (Tank Battlefield Situational Awareness System) Project run by 5th Hyundai Rotem Bootcamp
-
-# Tank Challenge - 자율주행 및 전투 통합 시스템
+TBSA (Tank Battlefield Situational Awareness System) Project
 
 ## 프로젝트 개요
 
 > *[여기에 프로젝트 개요를 작성하세요]*
 
 ## 작전 시나리오
-
-> *[여기에 작전 시나리오를 작성하세요]*
+![scenario](images/scenario_map.png)
+> *목표: 적군의 동향을 파악하고, 적의 시선을 다른 쪽으로 분산시켜 궤단 이단 조치 중에 있는 아군 전차를 엄호한다.*
+1. 아군의 스마트 전차 '로텍스 (Rotex)'를 RP1으로 이동
+2. 적군의 전장 상황을 파악하고, 위험도가 높은 적 전차를 판별하여 공격 또는 방어 모드를 실행
+3. 아군 기지 후위 합류를 위해 RP2로 이동
+4. 베이스캠프로 합류를 위해 적에게 보이지 않도록 우회하여 이동
 
 ---
 
@@ -106,32 +108,20 @@ TBSA (Tank Battlefield Situational Awareness System) Project run by 5th Hyundai 
 
 ### 5. 전투 시스템 (Combat System)
 
+#### 전투 시스템 상태
+![combat system state](images/combat_system_diagram.png)
+
+- **SCAN**: 터렛 회전하며 적 탐색 (포신 하향 → 회전 탐색)
+- **STANDBY**: 타겟 잠금 및 조준 정렬 대기
+- **RESCAN**: 터렛을 다시 회전하며 적 탐색 (SCAN 상태로 돌아감)
+- **FIRE**: 조준 완료 시 발사 실행
+- **RETREAT**: 사전 지정된 RP2로 이동할 수 있도록 포신 정렬
+
 #### 듀얼 YOLO 객체 인식
 - **Cannon 전용 모델**: 적 포탑 탐지 특화
 - **통합 객체 인식 모델**: Mine, Red, Rock, Tank, Tree 분류
 - **NMS 중복 제거**: IoU 기반 Overlap 박스 필터링
 - **ByteTrack 추적**: 탐지된 Tank에 고유 ID 부여
-
-#### State Machine (전투 모드)
-```
-  ┌──────────────────────────────────────────────────────┐
-  │                                                      │
-  │    ┌──────┐     적 감지      ┌─────────┐            │
-  │    │ SCAN │ ───────────────▶ │ STANDBY │            │
-  │    └──────┘                  └────┬────┘            │
-  │        ▲                          │                 │
-  │        │ RESCAN                   │ FIRE 버튼       │
-  │        │                          ▼                 │
-  │    ┌───┴────┐              ┌──────────┐            │
-  │    │ RESCAN │ ◀─── 발사후 ─│  FIRE    │            │
-  │    └────────┘              └──────────┘            │
-  │                                                      │
-  └──────────────────────────────────────────────────────┘
-```
-
-- **SCAN**: 터렛 회전하며 적 탐색 (포신 하향 → 회전 탐색)
-- **STANDBY**: 타겟 잠금 및 조준 정렬 대기
-- **FIRE**: 조준 완료 시 발사 실행
 
 #### 조준 시스템
 - **Yaw/Pitch 오차 계산**: 타겟 BBox 중심과 화면 중심 간 각도 차이
