@@ -984,7 +984,7 @@ def init():
     """Unity 초기화 설정 반환"""
     config_data = {
         "startMode": "start",
-        "blStartX": 130, "blStartY": 15, "blStartZ": 30,
+        "blStartX": 160, "blStartY": 15, "blStartZ": 190,
         "rdStartX": 300, "rdStartY": 10, "rdStartZ": 300,
         "trackingMode": True,
         "detectMode": True,

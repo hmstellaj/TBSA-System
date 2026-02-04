@@ -273,14 +273,66 @@ function refresh() {
             const actionStatus = document.getElementById('action-status-text');
             
             // SCAN 또는 RESCAN(서버에서는 결국 SCAN 모드)일 때만 활성화
+            // if (combatMode === 'SCAN') {
+            //     scanQBtn.disabled = false;
+            //     scanEBtn.disabled = false;
+            //     scanDirCard.style.opacity = "1.0"; // 시각적으로 활성화 표시
+            // } else {
+            //     scanQBtn.disabled = true;
+            //     scanEBtn.disabled = true;
+            //     scanDirCard.style.opacity = "0.5"; // 비활성화 시 흐리게 처리
+            // }
+            
+            // / 상황인식판 요소 가져오기
+            const situationCard = document.getElementById('situation-awareness-card');
+            const tankCountDisplay = document.getElementById('tank-count-display');
+            const redCountDisplay = document.getElementById('red-count-display');
+
+            // SCAN 방향이 선택되었는지 확인
+            const scanDirectionSet = j.scan_direction !== null && j.scan_direction !== undefined;
+
             if (combatMode === 'SCAN') {
-                scanQBtn.disabled = false;
-                scanEBtn.disabled = false;
-                scanDirCard.style.opacity = "1.0"; // 시각적으로 활성화 표시
+                if (!scanDirectionSet) {
+                    // 방향 선택 전: SCAN 방향 카드 표시, 상황인식판 숨김
+                    scanDirCard.style.display = "block";
+                    situationCard.style.display = "none";
+                    scanQBtn.disabled = false;
+                    scanEBtn.disabled = false;
+                } else {
+                    // 방향 선택 후: SCAN 방향 카드 숨김, 상황인식판 표시
+                    scanDirCard.style.display = "none";
+                    situationCard.style.display = "block";
+                    
+                    // Tank, RED 개수 계산
+                    let tankCount = 0;
+                    let redCount = 0;
+                    targets.forEach(t => {
+                        const className = (t.className || t.category || '').toLowerCase();
+                        if (className === 'tank') tankCount++;
+                        if (className === 'red') redCount++;
+                    });
+                    
+                    tankCountDisplay.textContent = tankCount;
+                    redCountDisplay.textContent = redCount;
+                }
             } else {
+                // SCAN 모드가 아닐 때 (STANDBY 등)
+                scanDirCard.style.display = "none";
+                situationCard.style.display = "block";
                 scanQBtn.disabled = true;
                 scanEBtn.disabled = true;
-                scanDirCard.style.opacity = "0.5"; // 비활성화 시 흐리게 처리
+                
+                // Tank, RED 개수 계산
+                let tankCount = 0;
+                let redCount = 0;
+                targets.forEach(t => {
+                    const className = (t.className || t.category || '').toLowerCase();
+                    if (className === 'tank') tankCount++;
+                    if (className === 'red') redCount++;
+                });
+                
+                tankCountDisplay.textContent = tankCount;
+                redCountDisplay.textContent = redCount;
             }
 
             // STANDBY 버튼: SCAN 모드일 때만 활성화

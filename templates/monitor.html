@@ -185,17 +185,34 @@
     <div id="combat-layout" class="layout-content">
         <div class="combat-container">
             <div class="card combat-overlay-card">
-                <div class="title">🎯 Sensor Fusion Overlay</div>
+                <div class="title"> 🛑 Sensor Fusion Overlay</div>
                 <img id="combat-overlay" src="/overlay/left">
             </div>
             <div class="combat-sidebar">
 
                 <div class="card" id="scan-direction-card">
-                    <div class="title">📡 SCAN 탐색 방향</div>
+                    <div class="title">🔄 SCAN 탐색 방향</div>
                     <div id="scan-direction-panel" style="padding: 5px;">
                         <div style="display: flex; gap: 5px;">
                             <button id="scan-q-btn" onclick="setScanDir('Q')" class="action-btn" style="flex: 1;">⬅️ 좌측 (Q)</button>
                             <button id="scan-e-btn" onclick="setScanDir('E')" class="action-btn" style="flex: 1;">➡️ 우측 (E)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 상황인식판 (방향 선택 후에만 표시) -->
+                <div class="card" id="situation-awareness-card" style="display: none;">
+                    <div class="title">📟 상황 인식</div>
+                    <div style="padding: 10px;">
+                        <div style="display: flex; justify-content: space-around; text-align: center;">
+                            <div>
+                                <div style="font-size: 2em; color: #ffffff; font-weight: bold;" id="tank-count-display">0</div>
+                                <div style="color: #888; font-size: 0.9em;">🏴‍☠️ Tank</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 2em; color: #ffffff; font-weight: bold;" id="red-count-display">0</div>
+                                <div style="color: #888; font-size: 0.9em;">🧍RED</div>
+                            </div>
                         </div>
                     </div>
                 </div>
