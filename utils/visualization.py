@@ -10,6 +10,7 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
 # OS별 자동 폰트 설정 코드
 def set_korean_font():
@@ -433,30 +434,38 @@ class VisualizationManager:
             # ═══════════════════════════════════════════════════════════════
             # 5. 현재 전차 위치 (빨간색 갈매기 화살표)
             # ═══════════════════════════════════════════════════════════════
-            yaw_rad = np.radians(self.state.player_body_x) if self.state.player_body_x is not None else 0
+            # yaw_rad = np.radians(self.state.player_body_x) if self.state.player_body_x is not None else 0
             
-            # 화살표 크기 대폭 키움 (고정 크기 12m) -> 맵에서 확실히 보임
-            arrow_size = 12.0  
+            # # 화살표 크기 대폭 키움 (고정 크기 12m) -> 맵에서 확실히 보임
+            # arrow_size = 12.0  
             
-            # 갈매기 모양 좌표
-            seagull_x = np.array([0, -arrow_size*0.6, 0, arrow_size*0.6])
-            seagull_z = np.array([arrow_size, -arrow_size*0.4, 0, -arrow_size*0.4])
+            # # 갈매기 모양 좌표
+            # seagull_x = np.array([0, -arrow_size*0.6, 0, arrow_size*0.6])
+            # seagull_z = np.array([arrow_size, -arrow_size*0.4, 0, -arrow_size*0.4])
             
-            # 회전 변환
-            cos_yaw = np.cos(yaw_rad)
-            sin_yaw = np.sin(yaw_rad)
-            rotated_x = seagull_x * cos_yaw - seagull_z * sin_yaw + cx
-            rotated_z = seagull_x * sin_yaw + seagull_z * cos_yaw + cz
+            # # 회전 변환
+            # cos_yaw = np.cos(yaw_rad)
+            # sin_yaw = np.sin(yaw_rad)
+            # rotated_x = seagull_x * cos_yaw - seagull_z * sin_yaw + cx
+            # rotated_z = seagull_x * sin_yaw + seagull_z * cos_yaw + cz
             
-            # [핵심] 빨간색 내부 + 노란색 테두리 (가시성 극대화)
-            from matplotlib.patches import Polygon
-            tank_poly = Polygon(list(zip(rotated_x, rotated_z)), 
-                                facecolor='#D50000',  # 밝은 빨강
-                                edgecolor='#FFEA00',  # 형광 노랑 테두리
-                                linewidth=2.5,        # 두꺼운 테두리
-                                alpha=1.0, 
-                                zorder=10)            # 맨 위에 그림
-            ax.add_patch(tank_poly)
+            # # [핵심] 빨간색 내부 + 노란색 테두리 (가시성 극대화)
+            # from matplotlib.patches import Polygon
+            # tank_poly = Polygon(list(zip(rotated_x, rotated_z)), 
+            #                     facecolor='#D50000',  # 밝은 빨강
+            #                     edgecolor='#FFEA00',  # 형광 노랑 테두리
+            #                     linewidth=2.5,        # 두꺼운 테두리
+            #                     alpha=1.0, 
+            #                     zorder=10)            # 맨 위에 그림
+            # ax.add_patch(tank_poly)
+            tank_circle = Circle((cx, cz),
+                                 radius=6.0,
+                                 facecolor='#D50000',
+                                 edgecolor='#FFEA00',  # 형광 노랑 테두리
+                                 linewidth=2.5,        # 두꺼운 테두리
+                                 alpha=1.0, 
+                                 zorder=10)
+            ax.add_patch(tank_circle)
             
             # ═══════════════════════════════════════════════════════════════
             # 6. 축 범위 설정 (SEQ별 고정 뷰포트 적용)
