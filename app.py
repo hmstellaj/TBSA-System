@@ -79,12 +79,64 @@ app = Flask(__name__)
 config = Config()
 state_manager = StateManager(config)
 
-# YOLO 모델 로드 (듀얼 모델)
-model_cannon = YOLO(combat_config.model_cannon_path)
-model_integrated = YOLO(combat_config.model_integrated_path)
+# 모델 로드 (ONNX 또는 PyTorch)
+USE_ONNX = combat_config.use_onnx
 
-# Legacy 모델 (기존 호환성 유지, SEQ 2 전용)
-model = YOLO(combat_config.model_path) if os.path.exists(combat_config.model_path) else None
+if USE_ONNX:
+    # ONNX 모델 로드
+    from utils.onnx_detector import OnnxYoloDetector
+    
+    print("=" * 60)
+    print("🚀 ONNX 모드 활성화")
+    print("=" * 60)
+    
+    try:
+        model_cannon = OnnxYoloDetector(
+            combat_config.onnx_cannon_path,
+            input_size=(combat_config.onnx_input_size, combat_config.onnx_input_size),
+            use_gpu=combat_config.onnx_use_gpu,
+            fp16=combat_config.onnx_fp16
+        )
+        model_integrated = OnnxYoloDetector(
+            combat_config.onnx_integrated_path,
+            input_size=(combat_config.onnx_input_size, combat_config.onnx_input_size),
+            use_gpu=combat_config.onnx_use_gpu,
+            fp16=combat_config.onnx_fp16
+        )
+        # Legacy 모델도 ONNX로 (best.onnx가 있는 경우)
+        onnx_best_path = combat_config.model_path.replace(".pt", ".onnx")
+        if os.path.exists(onnx_best_path):
+            model = OnnxYoloDetector(
+                onnx_best_path,
+                input_size=(combat_config.onnx_input_size, combat_config.onnx_input_size),
+                use_gpu=combat_config.onnx_use_gpu,
+                fp16=combat_config.onnx_fp16
+            )
+        else:
+            model = model_integrated  # ONNX best 없으면 integrated 사용
+            
+    except Exception as e:
+        print(f"[ONNX] ⚠️ ONNX 모델 로드 실패: {e}")
+        print("[ONNX] PyTorch 모드로 폴백합니다.")
+        USE_ONNX = False
+        # 폴백: PyTorch 모델 로드
+        model_cannon = YOLO(combat_config.model_cannon_path)
+        model_integrated = YOLO(combat_config.model_integrated_path)
+        model = YOLO(combat_config.model_path) if os.path.exists(combat_config.model_path) else None
+
+else:
+    # PyTorch YOLO 모델 로드 (듀얼 모델)
+    print("=" * 60)
+    print("🔷 PyTorch 모드 활성화")
+    print("=" * 60)
+    model_cannon = YOLO(combat_config.model_cannon_path)
+    model_integrated = YOLO(combat_config.model_integrated_path)
+    
+    # Legacy 모델 (기존 호환성 유지, SEQ 2 전용)
+    model = YOLO(combat_config.model_path) if os.path.exists(combat_config.model_path) else None
+
+# 트래킹용 이전 탐지 결과 저장 (ONNX 모드)
+prev_tank_detections = []
 
 # 주행 모듈
 planner = AStarPlanner(
@@ -294,11 +346,12 @@ def handle_scan_mode(image_path, img_pil, state_manager):
     """
     # 듀얼 모델로 전체 객체 탐지
     filtered_results, meta = detect_all_objects_dual(
-        image_path,
+        img_pil,
         model_cannon=model_cannon,
         model_integrated=model_integrated,
         combat_config=combat_config,
-        fusion_cfg=fusion_cfg
+        fusion_cfg=fusion_cfg,
+        use_onnx=USE_ONNX,
     )
     
     # 탐지 결과 저장
@@ -332,19 +385,26 @@ def handle_standby_mode(image_path, img_pil, state_manager, now):
     Returns:
         dict: JSON 응답 데이터
     """
+    global prev_tank_detections
+
     w_img, h_img = img_pil.size
     
     # 1. 탱크 객체만 추적 탐지
     tracked_tanks = detect_tank_only_track(
-        image_path,
+        img_pil,
         model_integrated,
         combat_config.map_integrated,
         combat_config.color_integrated,
         fusion_cfg.min_det_conf,
         fusion_cfg.min_box_w,
-        fusion_cfg.min_box_h
+        fusion_cfg.min_box_h,
+        use_onnx=USE_ONNX,
+        prev_detections=prev_tank_detections if USE_ONNX else None
     )
     
+    if USE_ONNX:
+        prev_tank_detections = tracked_tanks.copy()
+
     # 2. 센서 퓨전 수행
     fusion_ok, merged_results, uv_valid, dist_valid = perform_sensor_fusion(
         img_pil, tracked_tanks, state_manager, now
@@ -984,7 +1044,7 @@ def init():
     """Unity 초기화 설정 반환"""
     config_data = {
         "startMode": "start",
-        "blStartX": 160, "blStartY": 15, "blStartZ": 190,
+        "blStartX": 130, "blStartY": 15, "blStartZ": 30,
         "rdStartX": 300, "rdStartY": 10, "rdStartZ": 300,
         "trackingMode": True,
         "detectMode": True,
@@ -1368,12 +1428,9 @@ def monitor():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 Tank Integrated System (Navigation + Combat)")
+    print("🚀 TBSA System (Navigation + Combat)")
     print("=" * 60)
     print(f"📂 LiDAR: {config.Lidar.LIDAR_FOLDER}")
-    print(f"🤖 YOLO Dual Models:")
-    print(f"   - Cannon: {combat_config.model_cannon_path}")
-    print(f"   - Integrated: {combat_config.model_integrated_path}")
     print(f"🚗 SEQ 1, 3: A* + PID 주행")
     print(f"⚔️ SEQ 2: LiDAR + YOLO 전장 상황 인식")
     print(f"🤖 SEQ 4: PPO 강화학습 + A* 하이브리드 자율주행")

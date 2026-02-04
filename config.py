@@ -77,7 +77,7 @@ class Config:
             print("LiDAR 폴더 설정 완료!")
 
         # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
-        LIDAR_FOLDER = _set_lidar_folder(user="soeao")
+        LIDAR_FOLDER = _set_lidar_folder(user="MSI")
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -538,6 +538,14 @@ class CombatSystemConfig:
     model_path: str = "models/best.pt"  # Legacy 모델 (호환성 유지)
     model_cannon_path: str = "models/cannon.pt"     # Cannon 전용 모델
     model_integrated_path: str = "models/integrated.pt"  # 통합 객체 인식 모델
+
+    # ONNX 모델 경로 (FP16 + 640 해상도)
+    use_onnx: bool = True  # True: ONNX 사용, False: PyTorch 사용
+    onnx_cannon_path: str = "models/cannon.onnx"      # Cannon 전용 ONNX 모델
+    onnx_integrated_path: str = "models/integrated.onnx"  # 통합 객체 ONNX 모델
+    onnx_input_size: int = 640  # ONNX 모델 입력 해상도
+    onnx_fp16: bool = True  # FP16 모드 사용 여부
+    onnx_use_gpu: bool = True  # GPU 가속 사용 여부
     
     # 파일 처리 설정
     file_poll_sec: float = 0.10        # 파일 폴링 간격 (초)
@@ -569,7 +577,7 @@ class CombatSystemConfig:
     target_position_red_threshold: int = 3
     target_position_message_duration: float = 3.0  # 초
 
-    # [추가] 오버레이 폰트 설정
+    # 오버레이 폰트 설정
     overlay_font_size: int = 20      # 폰트 크기 (작게 설정)
     overlay_font_path: str = "arial.ttf" # 폰트 파일 경로 (시스템에 맞는 폰트 사용)
 

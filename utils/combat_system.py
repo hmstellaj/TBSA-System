@@ -104,62 +104,124 @@ def _normalize_lidar_points(lidar_pts_raw):
     return normalized
 
 def detect_all_objects_dual(
-    image_path: str,
+    image_input,
     model_cannon,
     model_integrated,
     combat_config,
     fusion_cfg,
     nms_iou_th: float = 0.5,
+    use_onnx: bool = False,
 ):
     '''
-    듀얼 모델로 객체를 탐지하고 NMS 중첩 처리를 이용해서 IOU Overlap 제거
+    Args:
+        img_input: 파일 경로 (str) 또는 PIL Image 객체
+        model_cannon: Cannon 모델 (YOLO 또는 OnnxYoloDetector)
+        model_integrated: 통합 모델 (YOLO 또는 OnnxYoloDetector)
+        combat_config: CombatSystemConfig 인스턴스
+        fusion_cfg: FusionConfig 인스턴스
+        nms_iou_th: NMS IoU 임계값
+        use_onnx: True면 ONNX 모드, False면 PyTorch 모드
     '''
+
+    if isinstance(image_input, str):
+        # 파일 경로인 경우
+        img_pil = Image.open(image_input).convert("RGB")
+        image_path = image_input
+    elif isinstance(image_input, Image.Image):
+        # PIL Image인 경우
+        img_pil = image_input.convert("RGB") if image_input.mode != "RGB" else image_input
+        image_path = None
+    else:
+        raise ValueError(f"img_input must be str or PIL.Image, got {type(image_input)}")
+    
     temp_detections = []
 
-    model_configs = [
-        {"model": model_cannon, "mapping": combat_config.map_cannon, "color": combat_config.color_cannon},
-        {"model": model_integrated, "mapping": combat_config.map_integrated, "color": combat_config.color_integrated},
-    ]
+    if use_onnx:
+        # ═══════════════════════════════════════════════════════════════
+        # ONNX 모드: OnnxYoloDetector 사용
+        # ═══════════════════════════════════════════════════════════════
+        model_configs = [
+            {"detector": model_cannon, "mapping": combat_config.map_cannon, "color": combat_config.color_cannon},
+            {"detector": model_integrated, "mapping": combat_config.map_integrated, "color": combat_config.color_integrated},
+        ]
 
-    for cfg in model_configs:
-        # YOLO 추론
-        results = cfg["model"](image_path, conf=fusion_cfg.min_det_conf, verbose=False)
-        detections = results[0].boxes.data.cpu().numpy()
+        for cfg in model_configs:
+            # ONNX 추론
+            detections = cfg["detector"].detect(
+                img_pil,
+                conf_threshold=fusion_cfg.min_det_conf,
+                iou_threshold=0.45
+            )
 
-        for box in detections:
-            # Box 길이에 따라 Tracking 모드 판단
-            box_len = len(box)
-            
-            if box_len == 7:  # Tracking 활성화 상태
-                xmin, ymin, xmax, ymax = [float(x) for x in box[:4]]
-                track_id = int(box[4])
-                confidence = float(box[5])
-                class_id = int(box[6])
-            elif box_len == 6:  # 일반 탐지
-                xmin, ymin, xmax, ymax = [float(x) for x in box[:4]]
-                confidence = float(box[4])
-                class_id = int(box[5])
-            else:
-                continue
-            
-            # 매핑 확인
-            if class_id not in cfg["mapping"]:
-                continue
+            for det in detections:
+                class_id = det["class_id"]
+                
+                # 매핑 확인
+                if class_id not in cfg["mapping"]:
+                    continue
 
-            class_name = cfg["mapping"][class_id]
-            
-            # bbox 크기 필터
-            if (xmax - xmin) < fusion_cfg.min_box_w or (ymax - ymin) < fusion_cfg.min_box_h:
-                continue
+                class_name = cfg["mapping"][class_id]
+                bbox = det["bbox"]
+                xmin, ymin, xmax, ymax = bbox
+                
+                # bbox 크기 필터
+                if (xmax - xmin) < fusion_cfg.min_box_w or (ymax - ymin) < fusion_cfg.min_box_h:
+                    continue
 
-            # 탐지 추가
-            temp_detections.append({
-                "bbox": [xmin, ymin, xmax, ymax],
-                "confidence": confidence,
-                "class_name": class_name,
-                "color": cfg["color"],
-            })
-            
+                temp_detections.append({
+                    "bbox": bbox,
+                    "confidence": det["confidence"],
+                    "class_name": class_name,
+                    "color": cfg["color"],
+                })
+    else:
+        # ═══════════════════════════════════════════════════════════════
+        # PyTorch 모드: ultralytics YOLO 사용
+        # ═══════════════════════════════════════════════════════════════
+        model_configs = [
+            {"model": model_cannon, "mapping": combat_config.map_cannon, "color": combat_config.color_cannon},
+            {"model": model_integrated, "mapping": combat_config.map_integrated, "color": combat_config.color_integrated},
+        ]
+
+        for cfg in model_configs:
+            # YOLO 추론
+            results = cfg["model"](image_input, conf=fusion_cfg.min_det_conf, verbose=False)
+            detections = results[0].boxes.data.cpu().numpy()
+
+            for box in detections:
+                # Box 길이에 따라 Tracking 모드 판단
+                box_len = len(box)
+                
+                if box_len == 7:  # Tracking 활성화 상태
+                    xmin, ymin, xmax, ymax = [float(x) for x in box[:4]]
+                    track_id = int(box[4])
+                    confidence = float(box[5])
+                    class_id = int(box[6])
+                elif box_len == 6:  # 일반 탐지
+                    xmin, ymin, xmax, ymax = [float(x) for x in box[:4]]
+                    confidence = float(box[4])
+                    class_id = int(box[5])
+                else:
+                    continue
+                
+                # 매핑 확인
+                if class_id not in cfg["mapping"]:
+                    continue
+
+                class_name = cfg["mapping"][class_id]
+                
+                # bbox 크기 필터
+                if (xmax - xmin) < fusion_cfg.min_box_w or (ymax - ymin) < fusion_cfg.min_box_h:
+                    continue
+
+                # 탐지 추가
+                temp_detections.append({
+                    "bbox": [xmin, ymin, xmax, ymax],
+                    "confidence": confidence,
+                    "class_name": class_name,
+                    "color": cfg["color"],
+                })
+                
     # NMS (confidence 높은 순으로 IoU overlap 제거)
     temp_detections.sort(key=lambda x: x["confidence"], reverse=True)
     final_detections = []
@@ -177,7 +239,8 @@ def detect_all_objects_dual(
     tank_count = 0
     red_count = 0
     last_cannon_bbox = None
-# ═══════════════════════════════════════════════════════════════
+    
+    # ═══════════════════════════════════════════════════════════════
     # 🎨 bbox 오버레이 커스터마이징 설정
     # ═══════════════════════════════════════════════════════════════
     bbox_styles = {
@@ -207,8 +270,6 @@ def detect_all_objects_dual(
             "show_confidence": False,
         }
     }
-
-
 
     for det in final_detections:
         name = det["class_name"]
@@ -1318,7 +1379,7 @@ def compute_combat_action(state, lidar_points, sm_cfg):
 # ==============================================================================
 
 def detect_tank_only_track(
-    image_path: str,
+    image_input,
     yolo_model,
     class_map: dict,
     color_hex: str,
@@ -1326,65 +1387,160 @@ def detect_tank_only_track(
     min_box_w: float,
     min_box_h: float,
     track_lock=None,
+    use_onnx: bool = False,
+    prev_detections: list = None, # ONNX 트래킹용 이전 탐지 결과
 ):
+    if isinstance(image_input, str):
+        img_pil = Image.open(image_input).convert("RGB")
+    elif isinstance(image_input, Image.Image):
+        img_pil = image_input.convert("RGB") if image_input.mode != "RGB" else image_input
+    else:
+        raise ValueError(f"img_input must be str or PIL.Image, got {type(image_input)}")
+    
     # Tank class id 자동 추출
     tank_cls_ids = [cid for cid, name in class_map.items() if name == "Tank"]
     if not tank_cls_ids:
         tank_cls_ids = None  # (비권장) 맵핑에 Tank 없으면 필터 없이 수행
 
-    if track_lock is not None:
-        with track_lock:
+    if use_onnx:
+        # ═══════════════════════════════════════════════════════════════
+        # ONNX 모드: OnnxYoloDetector + IoU 기반 트래킹
+        # ═══════════════════════════════════════════════════════════════
+        all_detections = yolo_model.detect(
+            img_pil,
+            conf_threshold=min_det_conf,
+            iou_threshold=0.45
+        )
+        
+        # Tank 클래스만 필터링
+        tank_detections = []
+        for det in all_detections:
+            if tank_cls_ids is None or det["class_id"] in tank_cls_ids:
+                bbox = det["bbox"]
+                xmin, ymin, xmax, ymax = bbox
+                
+                if (xmax - xmin) < min_box_w or (ymax - ymin) < min_box_h:
+                    continue
+                
+                tank_detections.append({
+                    "bbox": bbox,
+                    "confidence": det["confidence"],
+                    "class_id": det["class_id"]
+                })
+        
+        # IoU 기반 트래킹 (track_id 할당)
+        out = []
+        iou_threshold = 0.3
+        
+        if prev_detections:
+            used_prev_ids = set()
+            
+            for det in tank_detections:
+                best_iou = 0
+                best_prev_id = None
+                
+                for prev in prev_detections:
+                    prev_tid = prev.get("track_id")
+                    if prev_tid in used_prev_ids:
+                        continue
+                    
+                    iou = _iou(det["bbox"], prev["bbox"])
+                    if iou > best_iou and iou >= iou_threshold:
+                        best_iou = iou
+                        best_prev_id = prev_tid
+                
+                if best_prev_id is not None:
+                    track_id = best_prev_id
+                    used_prev_ids.add(track_id)
+                else:
+                    # 새로운 track_id 할당
+                    max_existing = max([p.get("track_id", 0) for p in prev_detections] + [0])
+                    track_id = max_existing + 1
+                
+                det["track_id"] = track_id
+        else:
+            # 이전 탐지 없으면 순차적으로 ID 할당
+            for i, det in enumerate(tank_detections):
+                det["track_id"] = i + 1
+        
+        # 결과 포맷팅
+        for det in tank_detections:
+            track_id = det.get("track_id")
+            conf = det["confidence"]
+            
+            display = f"Tank"
+            if track_id is not None:
+                display = f"[ID:{track_id}] Tank ({conf:.2f})"
+            
+            out.append({
+                "className": display,
+                "category": "tank",
+                "bbox": det["bbox"],
+                "confidence": conf,
+                "color": color_hex,
+                "filled": False,
+                "updateBoxWhileMoving": False,
+                "track_id": track_id,
+            })
+        
+        return out
+    else:
+        # ═══════════════════════════════════════════════════════════════
+        # PyTorch 모드: ultralytics YOLO tracking 사용 (PIL Image 지원)
+        # ═══════════════════════════════════════════════════════════════
+        if track_lock is not None:
+            with track_lock:
+                results = yolo_model.track(
+                    img_pil,
+                    conf=min_det_conf,
+                    classes=tank_cls_ids,
+                    persist=True,
+                    tracker="bytetrack.yaml",
+                    verbose=False,
+                )
+        else:
             results = yolo_model.track(
-                image_path,
+                img_pil,
                 conf=min_det_conf,
                 classes=tank_cls_ids,
                 persist=True,
                 tracker="bytetrack.yaml",
                 verbose=False,
             )
-    else:
-        results = yolo_model.track(
-            image_path,
-            conf=min_det_conf,
-            classes=tank_cls_ids,
-            persist=True,
-            tracker="bytetrack.yaml",
-            verbose=False,
-        )
 
-    r = results[0]
-    boxes = r.boxes
+        r = results[0]
+        boxes = r.boxes
 
-    xyxy = boxes.xyxy.cpu().numpy() if boxes.xyxy is not None else []
-    confs = boxes.conf.cpu().numpy() if boxes.conf is not None else []
-    tids  = boxes.id.int().cpu().numpy() if boxes.id is not None else [None] * len(xyxy)
+        xyxy = boxes.xyxy.cpu().numpy() if boxes.xyxy is not None else []
+        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else []
+        tids  = boxes.id.int().cpu().numpy() if boxes.id is not None else [None] * len(xyxy)
 
-    out = []
-    for bb, conf, tid in zip(xyxy, confs, tids):
-        xmin, ymin, xmax, ymax = map(float, bb.tolist())
-        conf = float(conf)
+        out = []
+        for bb, conf, tid in zip(xyxy, confs, tids):
+            xmin, ymin, xmax, ymax = map(float, bb.tolist())
+            conf = float(conf)
 
-        if (xmax - xmin) < min_box_w or (ymax - ymin) < min_box_h:
-            continue
+            if (xmax - xmin) < min_box_w or (ymax - ymin) < min_box_h:
+                continue
 
-        track_id = int(tid) if tid is not None else None
+            track_id = int(tid) if tid is not None else None
 
-        display = f"Tank"
-        if track_id is not None:
-            display = f"[ID:{track_id}] Tank ({conf:.2f})"
+            display = f"Tank"
+            if track_id is not None:
+                display = f"[ID:{track_id}] Tank ({conf:.2f})"
 
-        out.append({
-            "className": display,
-            "category": "tank",
-            "bbox": [xmin, ymin, xmax, ymax],
-            "confidence": conf,
-            "color": color_hex,
-            "filled": False,
-            "updateBoxWhileMoving": False,
-            "track_id": track_id,
-        })
+            out.append({
+                "className": display,
+                "category": "tank",
+                "bbox": [xmin, ymin, xmax, ymax],
+                "confidence": conf,
+                "color": color_hex,
+                "filled": False,
+                "updateBoxWhileMoving": False,
+                "track_id": track_id,
+            })
 
-    return out
+        return out
 
 # =========================================================
 # 9. Lock-on 대상 선택
