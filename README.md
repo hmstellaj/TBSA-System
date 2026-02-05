@@ -21,15 +21,16 @@ project/
 │   └── pid_controller.py           # PID 제어기
 │
 ├── drivingppo/
-│   ├── common.py                   # A* 전역 경로 계획
-│   ├── envrionment.py              # DWA 로컬 플래너
-│   └── ppo_feature_extractor.py    # 통합 PPO 플래너
+│   ├── common.py                   # 상수 정의
+│   ├── envrionment.py              # 학습용 시뮬레이션 환경
+│   ├── model.py                    # 모델 학습에 사용된 legacy 코드
+│   └── ppo_feature_extractor.py    # PPO 모델에 필요한 신경망 구조 정의
 │
 ├── planners/
 │   ├── astar_planner.py            # A* 전역 경로 계획
 │   ├── dwa_planner.py              # DWA 로컬 플래너
-│   ├── ppo_planner.py              # 통합 PPO 플래너
-│   └── working_rl_planner.py       # 통합 PPO 플래너
+│   ├── ppo_planner.py              # 통합 PPO 강화학습 플래너
+│   └── working_rl_planner.py       # PPO 로드 실패 시 대체 알고리즘
 │
 ├── utils/
 │   ├── state_manager.py            # 전역 상태 관리
