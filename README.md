@@ -47,7 +47,7 @@ project/
 
 | 이름 | 담당 | Contact |
 |------|------|------|
-| 이진진 |  |  | jj95lee@yonsei.ac.kr |
+| 이진진 |  | jj95lee@yonsei.ac.kr |
 | 김지온 |  |  |
 | 김현건 |  |  |
 | 김형규 |  | @sincerite0922 |
