@@ -19,7 +19,7 @@ import os
 from controllers.pid_controller import PIDController
 from planners.astar_planner import ObstacleRect
 from planners.dwa_planner import DWAConfig, calc_dynamic_window, predict_trajectory, calc_to_goal_cost
-# from planners.sb3_ppo_planner import HybridSB3PPOPlanner  # 사용 안함 - gyuppo_planner 사용
+# from planners.sb3_ppo_planner import HybridSB3PPOPlanner  # 사용 안함 - ppo_planner 사용
 from utils.visualization import save_path_image
 
 
@@ -39,11 +39,11 @@ class HybridController:
         # DWA 설정 (SEQ 4용)
         self.dwa_config = DWAConfig(config)
 
-        # RL Planner 설정 (SEQ 4 RL 모드용) - Gyuppo Planner
+        # RL Planner 설정 (SEQ 4 RL 모드용) - PPO Planner
         # 우선순위: withobs_model > ppo.zip > Potential Field
-        from planners.gyuppo_planner import UnifiedHybridPPOPlanner
+        from planners.ppo_planner import UnifiedHybridPPOPlanner
 
-        # Gyuppo Hybrid Planner (자동으로 최적 모델 선택)
+        # PPO Hybrid Planner (자동으로 최적 모델 선택)
         self.rl_planner = UnifiedHybridPPOPlanner(config, state_manager)
 
         # RL 모드 활성화 여부
