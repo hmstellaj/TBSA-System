@@ -2,7 +2,7 @@
 통합 PPO 플래너 - 여러 모델 형식 지원
 
 지원 모델:
-1. gyuppo_models/cnn/withobs_model/ (디렉토리 형식, 완성도 높은 모델)
+1. models/ppo_models/cnn/withobs_model/ (디렉토리 형식, 완성도 높은 모델)
 2. models/ppo.zip (ZIP 파일 형식)
 3. *.zip 파일 (일반 ZIP 모델)
 
@@ -83,12 +83,12 @@ class UnifiedPPOPlanner:
         # 시도할 모델 목록 (우선순위 순서)
         models_to_try = [
             ("ppo.zip [core]", os.path.join(base_dir, "models", "ppo.zip")),  # core.zip 학습 모델 - 최우선
-            ("3_withobs_2.zip", os.path.join(base_dir, "gyuppo_models", "cnn", "3_withobs_2.zip")),
-            ("3_withobs.zip", os.path.join(base_dir, "gyuppo_models", "cnn", "3_withobs.zip")),
-            ("1_naive.zip", os.path.join(base_dir, "gyuppo_models", "cnn", "1_naive.zip")),
-            ("2_plain.zip", os.path.join(base_dir, "gyuppo_models", "cnn", "2_plain.zip")),
-            ("2.plain.zip", os.path.join(base_dir, "gyuppo_models", "2.plain.zip")),
-            ("0____.zip", os.path.join(base_dir, "gyuppo_models", "cnn", "0____.zip")),
+            ("3_withobs_2.zip", os.path.join(base_dir, "models", "ppo_models", "cnn", "3_withobs_2.zip")),
+            ("3_withobs.zip", os.path.join(base_dir, "models", "ppo_models", "cnn", "3_withobs.zip")),
+            ("1_naive.zip", os.path.join(base_dir, "models", "ppo_models", "cnn", "1_naive.zip")),
+            ("2_plain.zip", os.path.join(base_dir, "models", "ppo_models", "cnn", "2_plain.zip")),
+            ("2.plain.zip", os.path.join(base_dir, "models", "ppo_models", "2.plain.zip")),
+            ("0____.zip", os.path.join(base_dir, "models", "ppo_models", "cnn", "0____.zip")),
             ("best.zip", os.path.join(base_dir, "best.zip")),  # YOLO - 마지막
         ]
 
@@ -287,13 +287,13 @@ class UnifiedPPOPlanner:
                 from gymnasium import Env
                 from gymnasium.spaces import Box
             except ImportError:
-                import gym
-                from gym import Env
-                from gym.spaces import Box
+                import gymnasium as gym
+                from gymnasium import Env
+                from gymnasium.spaces import Box
 
             # MyFeatureExtractor import
             try:
-                from gyuppo_feature_extractor import MyFeatureExtractor, OBSERVATION_DIM
+                from drivingppo.ppo_feature_extractor import MyFeatureExtractor, OBSERVATION_DIM
                 print(f"   ✅ MyFeatureExtractor 로드 성공 (관측 공간: {OBSERVATION_DIM}차원)")
             except ImportError as e:
                 print(f"   ⚠️ MyFeatureExtractor import 실패: {e}")
@@ -642,7 +642,7 @@ class UnifiedPPOPlanner:
         총 86차원
         """
         try:
-            from gyuppo_feature_extractor import (
+            from drivingppo.ppo_feature_extractor import (
                 LOOKAHEAD_POINTS, LIDAR_NUM, LIDAR_RANGE,
                 SPEED_MAX_W, SPD_MAX_STD
             )
