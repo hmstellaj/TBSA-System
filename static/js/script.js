@@ -15,6 +15,693 @@ let lastActionStatus = "";
 // 실시간 경로 이미지 업데이트 간격 (ms)
 const PATH_IMAGE_INTERVAL = 200;  // 0.5초마다 업데이트
 
+// ========================================
+// SEQ4 전용 1인칭 전방뷰 렌더링 모듈
+// ========================================
+const SEQ4 = {
+    canvas: null,
+    ctx: null,
+    miniCanvas: null,
+    miniCtx: null,
+    discovered: new Map(),
+    currentNearby: [],
+    trail: [],
+    maxTrailLength: 100,
+    sweepAngle: 0,
+    animationFrame: null,
+
+    tankX: 60,
+    tankZ: 200,
+    heading: 0,
+    cameraHeading: 180,
+    arrived: false,
+    path: [],
+    destination: null,
+
+    config: {
+        lidarRange: 50.0,
+        canvasWidth: 1000,
+        canvasHeight: 600,
+        focalLength: 500,
+        cameraHeight: 3.0,
+        horizon: 230,
+    },
+
+    init() {
+        console.log('[SEQ4] v3 init - cameraHeading default:', this.cameraHeading);
+        this.canvas = document.getElementById('seq4Canvas');
+        if (!this.canvas) return false;
+        this.ctx = this.canvas.getContext('2d');
+        this.resizeCanvas();
+        // 컨테이너 크기 변경 감지
+        this._resizeObserver = new ResizeObserver(() => this.resizeCanvas());
+        this._resizeObserver.observe(this.canvas.parentElement);
+        // 미니맵 캔버스
+        this.miniCanvas = document.getElementById('seq4Minimap');
+        if (this.miniCanvas) {
+            this.miniCtx = this.miniCanvas.getContext('2d');
+            this._miniResizeObserver = new ResizeObserver(() => this.resizeMinimap());
+            this._miniResizeObserver.observe(this.miniCanvas.parentElement);
+            this.resizeMinimap();
+        }
+        this.startAnimation();
+        return true;
+    },
+
+    resizeCanvas() {
+        const container = this.canvas.parentElement;
+        if (!container) return;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        if (w < 10 || h < 10) return;
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.config.canvasWidth = w;
+        this.config.canvasHeight = h;
+        this.config.focalLength = w * 0.5;
+        this.config.horizon = Math.floor(h * 0.38);
+    },
+
+    resizeMinimap() {
+        if (!this.miniCanvas) return;
+        const container = this.miniCanvas.parentElement;
+        if (!container) return;
+        const size = Math.min(container.clientWidth, container.clientHeight);
+        if (size < 10) return;
+        this.miniCanvas.width = size;
+        this.miniCanvas.height = size;
+    },
+
+    startAnimation() {
+        if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
+        this.animate();
+    },
+
+    stopAnimation() {
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+        }
+    },
+
+    updateData(data) {
+        const seq4 = data.seq4 || {};
+        const { nearby = [], heading = 0, path = [] } = seq4;
+        const { tank_pose, destination, log } = data;
+
+        if (tank_pose) {
+            this.tankX = tank_pose[0];
+            this.tankZ = tank_pose.length === 3 ? tank_pose[2] : tank_pose[1];
+            const now = Date.now();
+            if (this.trail.length === 0 ||
+                Math.hypot(this.tankX - this.trail[this.trail.length - 1].x,
+                          this.tankZ - this.trail[this.trail.length - 1].z) > 0.5) {
+                this.trail.push({ x: this.tankX, z: this.tankZ, time: now });
+                if (this.trail.length > this.maxTrailLength) this.trail.shift();
+            }
+        }
+
+        this.heading = heading || 0;
+        this.path = path || [];
+        this.destination = destination;
+
+        // 카메라 방향: 실제 이동 방향에서 계산 (heading 값 의존 X)
+        if (this.trail.length >= 3) {
+            const last = this.trail[this.trail.length - 1];
+            const prev = this.trail[Math.max(0, this.trail.length - 4)];
+            const mdx = last.x - prev.x;
+            const mdz = last.z - prev.z;
+            if (Math.hypot(mdx, mdz) > 0.3) {
+                this.cameraHeading = Math.atan2(mdx, mdz) * 180 / Math.PI;
+            }
+        } else if (destination) {
+            const ddx = destination[0] - this.tankX;
+            const ddz = destination[1] - this.tankZ;
+            this.cameraHeading = Math.atan2(ddx, ddz) * 180 / Math.PI;
+        }
+
+        // 현재 LiDAR 범위 안의 장애물만 저장 (실시간 표시용)
+        if (nearby) {
+            const now = Date.now();
+            this.currentNearby = nearby.map(obs => {
+                const key = `${obs.x.toFixed(1)}_${obs.z.toFixed(1)}`;
+                // 최초 발견 시각 기록 (글로우 효과용)
+                if (!this.discovered.has(key)) {
+                    this.discovered.set(key, now);
+                }
+                return { ...obs, discoveredAt: this.discovered.get(key) };
+            });
+        } else {
+            this.currentNearby = [];
+        }
+
+        // 우측 패널 UI 업데이트
+        const el = id => document.getElementById(id);
+        const d = el('seq4-discovered');
+        const l = el('seq4-log');
+        const cp = el('seq4-current-pos');
+        const dp = el('seq4-dest-pos');
+        const rm = el('seq4-remaining');
+        const arrRow = el('seq4-arrival-row');
+
+        if (d) d.textContent = `${this.currentNearby.length}개`;
+        if (l && log) l.textContent = log;
+        if (cp) cp.textContent = `(${this.tankX.toFixed(1)}, ${this.tankZ.toFixed(1)})`;
+        if (dp && destination) dp.textContent = `(${destination[0].toFixed(1)}, ${destination[1].toFixed(1)})`;
+        else if (dp) dp.textContent = '-';
+        if (rm && destination) {
+            const dist = Math.hypot(destination[0] - this.tankX, destination[1] - this.tankZ);
+            this.arrived = dist < 5;
+            rm.textContent = this.arrived ? '도착!' : `${dist.toFixed(1)}m`;
+            rm.style.color = dist < 20 ? '#4CAF50' : '#ff6666';
+            if (arrRow) arrRow.style.display = this.arrived ? 'flex' : 'none';
+        } else if (rm) { rm.textContent = '-'; }
+    },
+
+    animate() {
+        this.render();
+        if (this.miniCtx) this.renderMinimap(this.miniCtx);
+        this.sweepAngle += 2;
+        if (this.sweepAngle >= 360) this.sweepAngle = 0;
+        this.animationFrame = requestAnimationFrame(() => this.animate());
+    },
+
+    // 월드 좌표 → 카메라 좌표 (이동 방향 기준)
+    worldToCamera(wx, wz) {
+        const dx = wx - this.tankX;
+        const dz = wz - this.tankZ;
+        const rad = this.cameraHeading * Math.PI / 180;
+        return {
+            x: dx * Math.cos(rad) - dz * Math.sin(rad),
+            z: dx * Math.sin(rad) + dz * Math.cos(rad)
+        };
+    },
+
+    // ========== 메인 렌더 ==========
+    render() {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.config.canvasWidth, this.config.canvasHeight);
+
+        this.renderSky(ctx);
+        this.renderGround(ctx);
+        this.renderPathFP(ctx);
+        this.renderObstaclesFP(ctx);
+        // this.renderLidarSweepFP(ctx);  // 스캔라인 제거
+        this.renderDestinationFP(ctx);
+        this.renderCrosshair(ctx);
+        this.renderHUD(ctx);
+    },
+
+    // ========== 하늘 ==========
+    renderSky(ctx) {
+        const w = this.config.canvasWidth;
+        const hz = this.config.horizon;
+        const grad = ctx.createLinearGradient(0, 0, 0, hz);
+        grad.addColorStop(0, '#050510');
+        grad.addColorStop(0.7, '#0a1a0a');
+        grad.addColorStop(1, '#0f2f0f');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, hz);
+
+        // 지평선 글로우
+        const glow = ctx.createLinearGradient(0, hz - 25, 0, hz + 10);
+        glow.addColorStop(0, 'rgba(0,255,0,0)');
+        glow.addColorStop(0.5, 'rgba(0,255,0,0.06)');
+        glow.addColorStop(1, 'rgba(0,255,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, hz - 25, w, 35);
+    },
+
+    // ========== 지면 + 그리드 ==========
+    renderGround(ctx) {
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+        const hz = this.config.horizon;
+        const fl = this.config.focalLength;
+        const camH = this.config.cameraHeight;
+
+        // 지면 그라데이션
+        const gg = ctx.createLinearGradient(0, hz, 0, h);
+        gg.addColorStop(0, '#0a1a0a');
+        gg.addColorStop(1, '#152015');
+        ctx.fillStyle = gg;
+        ctx.fillRect(0, hz, w, h - hz);
+
+        // 수평 그리드 (거리별)
+        for (let z = 5; z <= 60; z += 5) {
+            const sy = hz + (camH / z) * fl;
+            if (sy > h || sy < hz) continue;
+            const a = Math.max(0.03, 0.2 * (1 - z / 60));
+            ctx.strokeStyle = `rgba(0,255,0,${a})`;
+            ctx.lineWidth = z < 15 ? 1 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+            ctx.stroke();
+        }
+
+        // 수직 그리드 (소실점 수렴)
+        const vx = w / 2;
+        for (let x = -60; x <= 60; x += 10) {
+            if (x === 0) continue;
+            const sx = (x / 3) * fl + w / 2;
+            const a = Math.max(0.03, 0.1 * (1 - Math.abs(x) / 60));
+            ctx.strokeStyle = `rgba(0,255,0,${a})`;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(vx, hz); ctx.lineTo(sx, h);
+            ctx.stroke();
+        }
+
+        // LiDAR 범위선
+        const rangeSY = hz + (camH / this.config.lidarRange) * fl;
+        if (rangeSY > hz && rangeSY < h) {
+            ctx.strokeStyle = 'rgba(0,255,0,0.25)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, rangeSY); ctx.lineTo(w, rangeSY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = '10px monospace';
+            ctx.fillStyle = 'rgba(0,255,0,0.4)';
+            ctx.textAlign = 'center';
+            ctx.fillText(`── ${this.config.lidarRange}m LIDAR RANGE ──`, w / 2, rangeSY - 4);
+            ctx.textAlign = 'left';
+        }
+    },
+
+    // ========== 장애물 (원근 투영) ==========
+    renderObstaclesFP(ctx) {
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+        const hz = this.config.horizon;
+        const fl = this.config.focalLength;
+        const camH = this.config.cameraHeight;
+        const now = Date.now();
+
+        // 거리순 정렬 (먼 것부터 → 가까운 것이 위에 그려짐)
+        const sorted = this.currentNearby.map(obs => {
+            const cam = this.worldToCamera(obs.x, obs.z);
+            return { ...obs, camX: cam.x, camZ: cam.z };
+        }).filter(o => o.camZ > 2).sort((a, b) => b.camZ - a.camZ);
+
+        sorted.forEach(obs => {
+            const { camX, camZ, size, discoveredAt } = obs;
+            const isNew = (now - discoveredAt) < 2000;
+            const glowFade = isNew ? Math.max(0, 1 - (now - discoveredAt) / 2000) : 0;
+
+            const sx = (camX / camZ) * fl + w / 2;
+            const groundY = hz + (camH / camZ) * fl;
+            const appW = Math.max(2, (size / camZ) * fl);
+            const appH = Math.max(2, (size * 1.8 / camZ) * fl);
+
+            if (sx + appW / 2 < 0 || sx - appW / 2 > w) return;
+            if (groundY < hz || groundY > h) return;
+
+            const fog = Math.max(0.1, 1 - camZ / this.config.lidarRange);
+            const topY = groundY - appH;
+
+            // 바닥 그림자
+            ctx.fillStyle = `rgba(0,0,0,${fog * 0.3})`;
+            ctx.fillRect(sx - appW * 0.6, groundY - 2, appW * 1.2, 4);
+
+            // 블록 본체
+            if (isNew) {
+                const br = Math.floor(220 * fog + 35 * glowFade);
+                ctx.fillStyle = `rgba(${br},${Math.floor(br * 0.7)},0,${fog})`;
+            } else {
+                const g = Math.floor(70 * fog);
+                ctx.fillStyle = `rgb(${g + 30},${g + 30},${g})`;
+            }
+            ctx.fillRect(sx - appW / 2, topY, appW, appH);
+
+            // 윗면 (밝게)
+            if (appH > 8) {
+                const topH = Math.max(2, appH * 0.15);
+                ctx.fillStyle = isNew
+                    ? `rgba(255,220,80,${fog * 0.7})`
+                    : `rgba(${Math.floor(110 * fog)},${Math.floor(110 * fog)},${Math.floor(100 * fog)},1)`;
+                ctx.fillRect(sx - appW / 2, topY, appW, topH);
+            }
+
+            // 테두리
+            if (isNew) {
+                ctx.strokeStyle = `rgba(255,200,0,${fog * (0.5 + glowFade * 0.5)})`;
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 8 * glowFade;
+                ctx.shadowColor = 'rgba(255,200,0,0.8)';
+            } else {
+                ctx.strokeStyle = `rgba(0,255,0,${fog * 0.35})`;
+                ctx.lineWidth = 1;
+            }
+            ctx.strokeRect(sx - appW / 2, topY, appW, appH);
+            ctx.shadowBlur = 0;
+
+            // 거리 라벨
+            if (camZ < 35 && appW > 12) {
+                ctx.font = '10px monospace';
+                ctx.fillStyle = `rgba(0,255,0,${fog * 0.8})`;
+                ctx.textAlign = 'center';
+                ctx.fillText(`${camZ.toFixed(0)}m`, sx, topY - 5);
+                ctx.textAlign = 'left';
+            }
+        });
+    },
+
+    // ========== A* 경로 (바닥 도트) ==========
+    renderPathFP(ctx) {
+        if (!this.path || this.path.length < 2) return;
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+        const hz = this.config.horizon;
+        const fl = this.config.focalLength;
+        const camH = this.config.cameraHeight;
+
+        this.path.forEach(p => {
+            const cam = this.worldToCamera(p[0], p[1]);
+            if (cam.z < 3) return;
+            const sx = (cam.x / cam.z) * fl + w / 2;
+            const sy = hz + (camH / cam.z) * fl;
+            if (sx < 0 || sx > w || sy < hz || sy > h) return;
+
+            const fog = Math.max(0.1, 1 - cam.z / this.config.lidarRange);
+            const r = Math.max(1.5, 4 * (1 - cam.z / 60));
+            ctx.fillStyle = `rgba(255,255,0,${fog * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    },
+
+    // ========== LiDAR 스캔라인 (1인칭) ==========
+    renderLidarSweepFP(ctx) {
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+        const hz = this.config.horizon;
+        const fl = this.config.focalLength;
+
+        // 스윕 각도 → 화면상 위치
+        const relAngle = ((this.sweepAngle - this.cameraHeading + 540) % 360) - 180;
+        if (Math.abs(relAngle) > 50) return;
+
+        const sx = Math.tan(relAngle * Math.PI / 180) * fl + w / 2;
+
+        // 녹색 스캔 밴드
+        const grad = ctx.createLinearGradient(sx - 35, 0, sx + 35, 0);
+        grad.addColorStop(0, 'rgba(0,255,0,0)');
+        grad.addColorStop(0.5, 'rgba(0,255,0,0.12)');
+        grad.addColorStop(1, 'rgba(0,255,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(sx - 35, hz, 70, h - hz);
+
+        // 중심선
+        ctx.strokeStyle = 'rgba(0,255,0,0.25)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx, hz); ctx.lineTo(sx, h);
+        ctx.stroke();
+    },
+
+    // ========== 목적지 표시 ==========
+    renderDestinationFP(ctx) {
+        if (!this.destination) return;
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+        const hz = this.config.horizon;
+        const fl = this.config.focalLength;
+        const camH = this.config.cameraHeight;
+
+        const cam = this.worldToCamera(this.destination[0], this.destination[1]);
+        const dist = Math.hypot(this.destination[0] - this.tankX, this.destination[1] - this.tankZ);
+
+        // 전방에 있으면 지면에 마커
+        if (cam.z > 3) {
+            const sx = (cam.x / cam.z) * fl + w / 2;
+            const sy = hz + (camH / cam.z) * fl;
+            if (sx > 0 && sx < w && sy > hz && sy < h) {
+                const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+                const ms = Math.max(4, (6 / cam.z) * fl);
+
+                ctx.fillStyle = `rgba(255,68,68,${0.5 + pulse * 0.3})`;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy - ms);
+                ctx.lineTo(sx + ms * 0.6, sy);
+                ctx.lineTo(sx, sy + ms * 0.4);
+                ctx.lineTo(sx - ms * 0.6, sy);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = `rgba(255,100,100,${0.6 + pulse * 0.3})`;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.font = 'bold 12px monospace';
+                ctx.fillStyle = '#ff4444';
+                ctx.textAlign = 'center';
+                ctx.fillText(`TGT ${dist.toFixed(0)}m`, sx, sy - ms - 8);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        // 화면 상단에 방향 화살표 (항상 표시)
+        const worldAngle = Math.atan2(
+            this.destination[0] - this.tankX,
+            this.destination[1] - this.tankZ
+        ) * 180 / Math.PI;
+        const relA = ((worldAngle - this.cameraHeading + 540) % 360) - 180;
+        const arrowX = Math.max(30, Math.min(w - 30, w / 2 + relA * 3));
+        const pulse2 = 0.6 + 0.4 * Math.sin(Date.now() / 400);
+
+        ctx.save();
+        ctx.translate(arrowX, 25);
+        ctx.fillStyle = `rgba(255,68,68,${pulse2})`;
+        ctx.beginPath();
+        ctx.moveTo(0, -10); ctx.lineTo(10, 5); ctx.lineTo(-10, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#ff4444';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${dist.toFixed(0)}m`, 0, 20);
+        ctx.textAlign = 'left';
+        ctx.restore();
+    },
+
+    // ========== 조준점 ==========
+    renderCrosshair(ctx) {
+        const cx = this.config.canvasWidth / 2;
+        const cy = this.config.horizon + 30;
+
+        ctx.strokeStyle = 'rgba(0,255,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 20, cy); ctx.lineTo(cx - 6, cy);
+        ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + 20, cy);
+        ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy - 6);
+        ctx.moveTo(cx, cy + 6); ctx.lineTo(cx, cy + 15);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(0,255,0,0.5)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    // ========== HUD 오버레이 ==========
+    renderHUD(ctx) {
+        const w = this.config.canvasWidth;
+        const h = this.config.canvasHeight;
+
+        // 상단 나침반
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(w / 2 - 100, 0, 200, 18);
+        ctx.strokeStyle = 'rgba(0,255,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(w / 2 - 100, 0, 200, 18);
+
+        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const ch = ((this.cameraHeading % 360) + 360) % 360;
+        const di = Math.round(ch / 45) % 8;
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#0f0';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${dirs[di]}  ${ch.toFixed(0)}°`, w / 2, 13);
+        ctx.textAlign = 'left';
+
+        // 좌하단: 위치 + 장애물
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(5, h - 45, 190, 40);
+        ctx.strokeStyle = 'rgba(0,255,0,0.2)';
+        ctx.strokeRect(5, h - 45, 190, 40);
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#0f0';
+        ctx.fillText(`POS (${this.tankX.toFixed(1)}, ${this.tankZ.toFixed(1)})`, 12, h - 28);
+        ctx.fillText(`OBS ${this.currentNearby.length} nearby`, 12, h - 13);
+
+        // 우하단: 목적지 + 거리
+        if (this.destination) {
+            const dist = Math.hypot(this.destination[0] - this.tankX, this.destination[1] - this.tankZ);
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(w - 195, h - 45, 190, 40);
+            ctx.strokeStyle = this.arrived ? 'rgba(76,175,80,0.5)' : 'rgba(255,68,68,0.3)';
+            ctx.strokeRect(w - 195, h - 45, 190, 40);
+            ctx.font = '11px monospace';
+            ctx.fillStyle = this.arrived ? '#4CAF50' : '#ff6666';
+            ctx.fillText(`TGT (${this.destination[0].toFixed(0)}, ${this.destination[1].toFixed(0)})`, w - 188, h - 28);
+            ctx.fillStyle = dist < 20 ? '#4CAF50' : '#ff6666';
+            ctx.fillText(this.arrived ? 'ARRIVED' : `DST ${dist.toFixed(1)}m`, w - 188, h - 13);
+        }
+
+        // 도착 오버레이
+        if (this.arrived) {
+            const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 500);
+            ctx.fillStyle = `rgba(0,0,0,${0.3 * pulse})`;
+            ctx.fillRect(w / 2 - 160, h / 2 - 30, 320, 60);
+            ctx.strokeStyle = `rgba(76,175,80,${pulse})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(w / 2 - 160, h / 2 - 30, 320, 60);
+            ctx.font = 'bold 24px monospace';
+            ctx.fillStyle = `rgba(76,175,80,${pulse})`;
+            ctx.textAlign = 'center';
+            ctx.fillText('MISSION COMPLETE', w / 2, h / 2 + 8);
+            ctx.textAlign = 'left';
+        }
+    },
+
+    // ========== 미니맵 (탑다운 레이더) - 우측 패널 캔버스 ==========
+    renderMinimap(ctx) {
+        if (!this.miniCanvas) return;
+        const size = this.miniCanvas.width;
+        if (size < 10) return;
+
+        const cx = size / 2;
+        const cy = size / 2;
+        const radius = size / 2 - 8;
+        const scale = radius / this.config.lidarRange;
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.save();
+
+        // 배경 원
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,255,0,0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 클리핑
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.clip();
+
+        // LiDAR 범위 원 (점선)
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = 'rgba(0,255,0,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 십자선
+        ctx.strokeStyle = 'rgba(0,255,0,0.1)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy);
+        ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy + radius);
+        ctx.stroke();
+
+        // 레이더 스윕 부채꼴
+        const sweepRad = this.sweepAngle * Math.PI / 180;
+        const headRad = this.cameraHeading * Math.PI / 180;
+        const mapSweep = sweepRad - headRad;
+        const grad = ctx.createConicGradient(mapSweep - 0.5, cx, cy);
+        grad.addColorStop(0, 'rgba(0,255,0,0)');
+        grad.addColorStop(0.12, 'rgba(0,255,0,0.15)');
+        grad.addColorStop(0.15, 'rgba(0,255,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, mapSweep - 0.5, mapSweep);
+        ctx.closePath();
+        ctx.fill();
+
+        // 월드→미니맵 좌표 변환 (전차 중심, 진행 방향이 위쪽)
+        const toMap = (wx, wz) => {
+            const dx = wx - this.tankX;
+            const dz = wz - this.tankZ;
+            const r = -headRad;
+            const rx = dx * Math.cos(r) - dz * Math.sin(r);
+            const rz = dx * Math.sin(r) + dz * Math.cos(r);
+            return { x: cx + rx * scale, y: cy - rz * scale };
+        };
+
+        // 장애물 표시
+        this.currentNearby.forEach(obs => {
+            const p = toMap(obs.x, obs.z);
+            const s = Math.max(3, obs.size * scale * 0.8);
+            ctx.fillStyle = 'rgba(255,220,80,0.8)';
+            ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+            ctx.strokeStyle = 'rgba(255,200,0,0.4)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(p.x - s / 2, p.y - s / 2, s, s);
+        });
+
+        // 목적지 표시
+        if (this.destination) {
+            const dp = toMap(this.destination[0], this.destination[1]);
+            const dist = Math.hypot(dp.x - cx, dp.y - cy);
+            if (dist > radius - 5) {
+                const angle = Math.atan2(dp.y - cy, dp.x - cx);
+                const ex = cx + (radius - 10) * Math.cos(angle);
+                const ey = cy + (radius - 10) * Math.sin(angle);
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.arc(ex, ey, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.font = '10px monospace';
+                ctx.fillStyle = '#ff4444';
+                ctx.textAlign = 'center';
+                const dstDist = Math.hypot(this.destination[0] - this.tankX, this.destination[1] - this.tankZ);
+                ctx.fillText(`${dstDist.toFixed(0)}m`, ex, ey - 9);
+                ctx.textAlign = 'left';
+            } else {
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.moveTo(dp.x, dp.y - 6);
+                ctx.lineTo(dp.x + 5, dp.y + 4);
+                ctx.lineTo(dp.x - 5, dp.y + 4);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // 전차 (중앙, 삼각형)
+        ctx.fillStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 7);
+        ctx.lineTo(cx + 5, cy + 5);
+        ctx.lineTo(cx - 5, cy + 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // 범위 라벨
+        ctx.font = '10px monospace';
+        ctx.fillStyle = 'rgba(0,255,0,0.5)';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${this.config.lidarRange}m`, cx, cy + radius - 3);
+        ctx.textAlign = 'left';
+
+        ctx.restore();
+    },
+};
+
+
 window.addEventListener('load', () => {
     console.log('페이지 로드 완료 - 서버 생성 실시간 경로 이미지 모드');
     gameLoop();
@@ -436,12 +1123,19 @@ function refresh() {
             }).join('');
         } 
         // ═══════════════════════════════════════════════════════════════
-        // SEQ 4: 자율주행
+        // SEQ 4: 자율주행 - Canvas 렌더링
         // ═══════════════════════════════════════════════════════════════
         else if (serverSeq === 4) {
-            document.getElementById('autonomous-layout').classList.add('active');
-            document.getElementById('autonomous-view').src = '/view_autonomous?t=' + t;
-            document.getElementById('autonomous-costmap-global').src = '/view_autonomous?t=' + t;
+            const layout = document.getElementById('autonomous-layout');
+            layout.classList.add('active');
+
+            // Canvas 렌더링 초기화 (최초 1회)
+            if (!SEQ4.canvas) {
+                SEQ4.init();
+            }
+
+            // 데이터 업데이트
+            SEQ4.updateData(j);
         }
 
         // 공통 정보 업데이트

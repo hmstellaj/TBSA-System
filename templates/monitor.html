@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tank Integrated Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(10000,99999) | random }}">
     <style>
         /* ✅ 자동 줄이기 */
         :root {
@@ -140,7 +140,7 @@
         <input type="text" id="dest-input" placeholder="x, z" style="padding: 8px; border: 1px solid #444; border-radius: 5px; background: #1a1a1a; color: #fff; width: 100px;">
         <button onclick="setDestination()" class="set-dest-btn">설정</button>
         <div style="height: 24px; width: 1px; background: #444; margin: 0 5px;"></div>
-        <button onclick="setQuickDest(160, 190)" class="quick-btn">📍 정찰지</button>
+        <button onclick="setQuickDest(160, 185)" class="quick-btn">📍 정찰지</button>
         <button onclick="setQuickDest(49, 236)" class="quick-btn">📍 경유지</button>
         <button onclick="setQuickDest(65, 30)" class="quick-btn">📍 아군 캠프</button>
         <span id="dest-status" style="margin-left: auto; font-size: 0.85em;"></span>
@@ -246,12 +246,60 @@
 
     <!-- SEQ 4 -->
     <div id="autonomous-layout" class="layout-content">
-        <div class="auto-grid">
-            <div class="card"><div class="title">🔍 자율주행 실시간 디버깅</div><img id="autonomous-view" src="/view_autonomous" alt="Autonomous View" style="width: 100%; border: 1px solid #ccc; background-color: #f0f0f0;"></div>
-            <div class="card"><div class="title">🗺️ Global Accumulated Map</div><img id="autonomous-costmap-global" src="/view_autonomous"></div>
+        <div class="nav-container-final">
+            <!-- 좌측: Canvas 전술 디스플레이 -->
+            <div class="nav-main-section">
+                <div class="main-card-v2">
+                    <div class="title">🎯 LiDAR 실시간 탐색 디스플레이</div>
+                    <div class="path-canvas-container">
+                        <canvas id="seq4Canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: 전술 정보 패널 -->
+            <div class="nav-right-section">
+                <div class="card" style="flex: 0 0 auto;">
+                    <div class="title">📡 전술 정보</div>
+                    <div style="padding: 8px;">
+                        <div class="stat-row">
+                            <span class="label">탐지 범위</span>
+                            <span class="value" id="seq4-lidar-range">50.0m</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">발견 장애물</span>
+                            <span class="value" id="seq4-discovered">0개</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">현재 위치</span>
+                            <span class="value" id="seq4-current-pos">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">목적지</span>
+                            <span class="value" id="seq4-dest-pos">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">남은 거리</span>
+                            <span class="value" id="seq4-remaining" style="color: #ff6666;">-</span>
+                        </div>
+                        <div id="seq4-arrival-row" class="stat-row" style="display:none;">
+                            <span class="label" style="color:#4CAF50;">상태</span>
+                            <span class="value" id="seq4-arrival" style="color:#4CAF50;">목적지 도착!</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 미니맵 (탑다운 레이더) -->
+                <div class="card log-card-v2">
+                    <div class="title">📡 LiDAR Radar</div>
+                    <div style="flex:1; display:flex; align-items:center; justify-content:center; background:#0a0a0a; border-radius:5px; min-height:0;">
+                        <canvas id="seq4Minimap" style="display:block; max-width:100%; max-height:100%;"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v={{ range(10000,99999) | random }}"></script>
 </body>
 </html>

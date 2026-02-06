@@ -77,7 +77,11 @@ class Config:
             print("LiDAR 폴더 설정 완료!")
 
         # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
+<<<<<<< HEAD
         LIDAR_FOLDER = _set_lidar_folder(user="soeao")
+=======
+        LIDAR_FOLDER = _set_lidar_folder(user="user")
+>>>>>>> 3b56e90ea3d716785ed63ceb3a0d13468e45b81b
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -312,7 +316,30 @@ class Config:
         
         # 복구 속도
         REVERSE_SPEED = 0.1  # 후진 속도
-    
+
+    # ========================================
+    # Stop-Steer-Go 장애물 회피 설정
+    # ========================================
+    class StopSteerGo:
+        """장애물 조우 시 정지→조향→출발 3단계 회피"""
+
+        ENABLE = True                # SSG 활성화 여부
+        TRIGGER_STUCK_COUNT = 5      # DWA 유효경로 없음이 연속 N회 시 SSG 진입
+
+        # Phase 1: 정지 (상황 판단)
+        STOP_SEC = 0.5               # 정지 시간 (초)
+
+        # Phase 2: 조향 탐색
+        STEER_SEC = 2.0              # 최대 조향 탐색 시간 (초)
+        SCAN_RAYS = 12               # 탐색 방향 수 (360/12 = 30도 간격)
+        STEER_WEIGHT = 0.7           # 조향 가중치
+        MIN_CLEAR_DIST = 6.0         # 이 거리 이상이면 "클리어" 판정 (m)
+
+        # Phase 3: 출발
+        GO_SEC = 1.5                 # 클리어 방향으로 전진 시간 (초)
+        GO_WS_WEIGHT = 0.5           # 전진 가중치
+        GO_AD_WEIGHT = 0.3           # 출발 시 조향 보정 가중치
+
     # ========================================
     # 경로 추종 설정
     # ========================================

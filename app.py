@@ -18,6 +18,7 @@ Flask 서버 메인 - SEQ 기반 통합 시스템
 # 라이브러리 임포트
 # ==============================================================================
 import os
+import math
 os.environ["KMP_DUPLICATE_LIB_OK"] = 'True'
 import io
 import time
@@ -1337,32 +1338,63 @@ def debug_status():
     
     # SEQ 4 자율주행 시스템 정보
     if state_manager.seq == 4:
-        lidar_obstacles = []
-        if state_manager.costmap is not None and state_manager.costmap_origin is not None:
-            costmap = state_manager.costmap
-            origin = state_manager.costmap_origin
-            grid_size = config.Lidar.GRID_SIZE
-            
-            # 높은 비용 셀 (장애물) 추출
-            high_cost_mask = costmap >= 0.8
-            if np.any(high_cost_mask):
-                rows, cols = np.where(high_cost_mask)
-                
-                # 샘플링 (최대 50개)
-                max_display = 50
-                step = max(1, len(rows) // max_display)
-                for i in range(0, len(rows), step):
-                    x = float(origin[0] + cols[i] * grid_size + grid_size / 2)
-                    z = float(origin[1] + rows[i] * grid_size + grid_size / 2)
-                    lidar_obstacles.append({
-                        'x': x,
-                        'z': z,
-                        'size': float(grid_size),
-                        'type': 'lidar'
+        nearby_obstacles = []
+        lidar_range = 50.0
+        pose = status.get('tank_pose', [60.0, 0.0, 200.0])
+        tank_x = pose[0]
+        tank_z = pose[-1]
+
+        # obstacle_rects에서 직접 장애물 추출 (가장 신뢰성 높은 소스)
+        if hasattr(state_manager, 'obstacle_rects') and state_manager.obstacle_rects:
+            for obs in state_manager.obstacle_rects:
+                cx = (obs['x_min'] + obs['x_max']) / 2
+                cz = (obs['z_min'] + obs['z_max']) / 2
+                size_x = obs['x_max'] - obs['x_min']
+                size_z = obs['z_max'] - obs['z_min']
+                dist = math.hypot(cx - tank_x, cz - tank_z)
+
+                if dist <= lidar_range:
+                    nearby_obstacles.append({
+                        'x': float(cx),
+                        'z': float(cz),
+                        'size': float(max(size_x, size_z)),
+                        'type': 'rect',
+                        'distance': float(dist)
                     })
-        
-        status["lidar_obstacles"] = lidar_obstacles
-        status["obstacle_count"] = len(lidar_obstacles)
+
+        # global_obstacles 보조 소스 (costmap에서 누적된 점)
+        if hasattr(state_manager, 'global_obstacles') and state_manager.global_obstacles:
+            existing_keys = set(f"{o['x']:.0f}_{o['z']:.0f}" for o in nearby_obstacles)
+            grid_size = state_manager.global_obstacle_grid_size
+            for ox, oz in state_manager.global_obstacles:
+                key = f"{ox:.0f}_{oz:.0f}"
+                if key not in existing_keys:
+                    dist = math.hypot(ox - tank_x, oz - tank_z)
+                    if dist <= lidar_range:
+                        nearby_obstacles.append({
+                            'x': float(ox),
+                            'z': float(oz),
+                            'size': float(grid_size),
+                            'type': 'global',
+                            'distance': float(dist)
+                        })
+
+        # SEQ4 전용 데이터
+        heading = 0.0
+        if hasattr(state_manager, 'robot_yaw_deg') and state_manager.robot_yaw_deg is not None:
+            heading = state_manager.robot_yaw_deg
+
+        seq4_data = {
+            "lidar_range": lidar_range,
+            "nearby": nearby_obstacles,
+            "heading": heading,
+            "path": state_manager.global_path[:20] if state_manager.global_path else [],
+        }
+        status["seq4"] = seq4_data
+
+        # 기존 호환성 유지
+        status["lidar_obstacles"] = nearby_obstacles
+        status["obstacle_count"] = len(nearby_obstacles)
     
     return jsonify(status)
 
@@ -1415,7 +1447,7 @@ def realtime_path_image():
     
     # 크기 제한 (100~1200px)
     width = max(100, min(1200, width))
-    height = max(100, min(1200, height))
+    height = max(100, min(1200, height  ))
     
     buf = viz_manager.render_realtime_path_image(planner, image_size=(width, height))
     return send_file(buf, mimetype="image/png")
