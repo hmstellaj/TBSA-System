@@ -367,9 +367,76 @@ pre { background: #0a0a0a; color: #0f0; padding: 10px; border-radius: 5px; overf
     text-align: center;
 }
 
-/* SEQ 4 레이아웃 */
-.auto-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; height: 45vh; }
-.auto-grid .card { height: 100%; }
-.auto-grid img { max-height: calc(100% - 40px); }
+/* SEQ 4 레이아웃 - 1인칭 전방뷰 */
+#autonomous-layout.active { display: flex; height: 100%; }
+#autonomous-layout .nav-container-final {
+    grid-template-columns: 1fr 240px;
+    height: 100%;
+}
+
+#autonomous-layout .nav-main-section { height: 100%; }
+#autonomous-layout .main-card-v2 { height: 100%; }
+#autonomous-layout .path-canvas-container { height: 100%; min-height: 0; }
+
+#seq4Canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    border-radius: 5px;
+}
+
+/* LiDAR 통계 행 스타일 */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #333;
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-row .label {
+    color: #888;
+    font-size: 0.9em;
+}
+
+.stat-row .value {
+    color: #0f0;
+    font-weight: bold;
+    font-size: 0.95em;
+}
+
+/* LiDAR 스캔 펄스 애니메이션 */
+@keyframes scanPulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.6; }
+}
+
+.scan-effect {
+    animation: scanPulse 2s ease-in-out infinite;
+}
+
+/* 장애물 발견 글로우 효과 */
+@keyframes discoverGlow {
+    0% {
+        filter: drop-shadow(0 0 20px yellow);
+        transform: scale(1.1);
+    }
+    100% {
+        filter: drop-shadow(0 0 0 transparent);
+        transform: scale(1);
+    }
+}
+
+/* SEQ4 로그 스타일 */
+#seq4-log {
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    line-height: 1.4;
+}
+
 .obstacle-list { flex: 1; overflow-y: auto; background: #1a1a1a; border-radius: 5px; padding: 5px; }
 .obstacle-item { font-size: 0.85em; padding: 4px 8px; border-bottom: 1px solid #333; color: #ffeb3b; }

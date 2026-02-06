@@ -73,6 +73,13 @@ class HybridController:
         self.recovery_start_time = 0
         self.recovery_direction = 1
 
+        # Stop-Steer-Go 상태
+        self.ssg_mode = False
+        self.ssg_phase = None          # "stop", "steer", "go"
+        self.ssg_start_time = 0
+        self.ssg_best_direction = None # 최적 조향 방향 ("A" or "D")
+        self.ssg_no_valid_count = 0    # DWA 유효경로 없음 연속 카운트
+
         # 디버그 카운터
         self._compute_count = 0
         
@@ -84,6 +91,9 @@ class HybridController:
         self.stuck_counter = 0
         self.last_position = None
         self.recovery_mode = False
+        self.ssg_mode = False
+        self.ssg_phase = None
+        self.ssg_no_valid_count = 0
         
     def compute_action(self, curr_x, curr_z, curr_yaw):
         """메인 제어 루프"""
@@ -125,14 +135,18 @@ class HybridController:
         if dist_to_goal < self.config.ARRIVAL_THRESHOLD:
             return self._handle_arrival(curr_x, curr_z)
 
-        # 5. Stuck 감지
+        # 5. Stop-Steer-Go 진행중이면 우선 처리
+        if self.ssg_mode:
+            return self._stop_steer_go_action(curr_x, curr_z, curr_yaw)
+
+        # 6. Stuck 감지
         self._detect_stuck(curr_x, curr_z)
-        
-        # 6. Stuck 복구 모드 처리
+
+        # 7. Stuck 복구 모드 처리
         if self.stuck_counter >= self.config.Stuck.STUCK_COUNT_LIMIT:
             return self._recovery_action(curr_x, curr_z, curr_yaw)
         
-        # 7. SEQ에 따른 제어 분기
+        # 8. SEQ에 따른 제어 분기
         if self.state.seq == 4:
             # SEQ 4: RL 강화학습 (A* + PPO 하이브리드)
             rl_result = self._seq4_rl_control(curr_x, curr_z, curr_yaw)
@@ -490,8 +504,20 @@ class HybridController:
             print(f"🎯 DWA: 총={total_trajectories}, 유효={valid_trajectories}, "
                   f"비용={min_cost:.2f}, v={best_u[0]:.2f}, ω={best_u[1]:.3f}")
         
-        # 유효 경로 없음 → 후진 시도
+        # 유효 경로 없음 → Stop-Steer-Go 또는 후진
         if valid_trajectories == 0:
+            ssg_cfg = self.config.StopSteerGo
+            if ssg_cfg.ENABLE and not self.ssg_mode:
+                self.ssg_no_valid_count += 1
+                if self.ssg_no_valid_count >= ssg_cfg.TRIGGER_STUCK_COUNT:
+                    # SSG 진입
+                    self.ssg_mode = True
+                    self.ssg_phase = "stop"
+                    self.ssg_start_time = time.time()
+                    print(f"🛑 SSG 진입! (연속 {self.ssg_no_valid_count}회 유효경로 없음)")
+                    self.state.set_log("🛑 장애물 조우 → 정지-조향-출발 시작")
+                    return self._stop_steer_go_action(curr_x, curr_z, curr_yaw)
+            # SSG 미진입 시 기존 후진
             print("⚠️ DWA 유효 경로 없음 → 후진 시도")
             return {
                 "moveWS": {"command": "S", "weight": 0.3},
@@ -499,6 +525,9 @@ class HybridController:
                 "fire": False
             }
         
+        # 유효 경로 있음 → SSG 카운터 리셋
+        self.ssg_no_valid_count = 0
+
         # DWA 궤적 저장 (시각화용)
         self.state.last_dwa_traj = best_trajectory
         self.state.last_dwa_target = (float(target_point[0]), float(target_point[1]))
@@ -904,6 +933,142 @@ class HybridController:
             distances.append(min_dist)
 
         return distances
+
+    # ==================== Stop-Steer-Go 장애물 회피 ====================
+
+    def _ssg_find_best_direction(self, curr_x, curr_z, curr_yaw):
+        """가상 LiDAR로 가장 빈 방향 탐색, 목적지 방향도 가중"""
+        ssg = self.config.StopSteerGo
+        num_rays = ssg.SCAN_RAYS
+        max_range = 50.0
+
+        curr_yaw_rad = math.radians(curr_yaw)
+
+        # 목적지 방향 각도
+        dest_angle = None
+        if self.state.destination:
+            dx = self.state.destination[0] - curr_x
+            dz = self.state.destination[1] - curr_z
+            dest_angle = math.atan2(dx, dz)  # 북쪽 기준
+
+        best_score = -1
+        best_angle_offset = 0
+
+        for i in range(num_rays):
+            angle_offset = (2 * math.pi * i) / num_rays
+            ray_angle = curr_yaw_rad + angle_offset
+            ray_dx = math.sin(ray_angle)
+            ray_dz = math.cos(ray_angle)
+
+            min_dist = max_range
+            if hasattr(self.state, 'obstacle_rects') and self.state.obstacle_rects:
+                for obs in self.state.obstacle_rects:
+                    obs_cx = (obs["x_min"] + obs["x_max"]) / 2
+                    obs_cz = (obs["z_min"] + obs["z_max"]) / 2
+                    to_obs_x = obs_cx - curr_x
+                    to_obs_z = obs_cz - curr_z
+                    projection = to_obs_x * ray_dx + to_obs_z * ray_dz
+                    if projection > 0:
+                        dist = math.hypot(to_obs_x, to_obs_z)
+                        obs_radius = max(
+                            (obs["x_max"] - obs["x_min"]) / 2,
+                            (obs["z_max"] - obs["z_min"]) / 2
+                        )
+                        actual_dist = max(0.1, dist - obs_radius)
+                        if actual_dist < min_dist:
+                            min_dist = actual_dist
+
+            # 점수: 거리 + 목적지 방향 보너스
+            score = min_dist
+            if dest_angle is not None:
+                angle_diff = abs(math.atan2(math.sin(ray_angle - dest_angle),
+                                            math.cos(ray_angle - dest_angle)))
+                # 목적지 방향에 가까울수록 보너스 (최대 +10)
+                score += max(0, 10 * (1 - angle_diff / math.pi))
+
+            if score > best_score:
+                best_score = score
+                best_angle_offset = angle_offset
+
+        # 최적 방향이 현재 전방 기준 좌/우 어디인지 판별
+        # offset을 -pi ~ pi 범위로 정규화
+        if best_angle_offset > math.pi:
+            best_angle_offset -= 2 * math.pi
+
+        best_clear_dist = best_score
+        return best_angle_offset, best_clear_dist
+
+    def _stop_steer_go_action(self, curr_x, curr_z, curr_yaw):
+        """Stop-Steer-Go 3단계 장애물 회피
+
+        Phase 1 (STOP): 완전 정지하여 관성 제거
+        Phase 2 (STEER): 제자리 회전으로 가장 빈 방향 탐색 후 그 방향으로 조향
+        Phase 3 (GO): 클리어된 방향으로 전진
+        """
+        ssg = self.config.StopSteerGo
+        elapsed = time.time() - self.ssg_start_time
+
+        # Phase 1: STOP
+        if self.ssg_phase == "stop":
+            if elapsed < ssg.STOP_SEC:
+                return {
+                    "moveWS": {"command": "STOP", "weight": 1.0},
+                    "moveAD": {"command": "", "weight": 0.0},
+                    "fire": False
+                }
+            # → Phase 2 전환
+            angle_offset, clear_dist = self._ssg_find_best_direction(curr_x, curr_z, curr_yaw)
+            if angle_offset >= 0:
+                self.ssg_best_direction = "D"  # 우회전
+            else:
+                self.ssg_best_direction = "A"  # 좌회전
+
+            self.ssg_phase = "steer"
+            self.ssg_start_time = time.time()
+            print(f"🔄 SSG Phase2(STEER): 방향={self.ssg_best_direction}, "
+                  f"클리어거리={clear_dist:.1f}m, 각도차={math.degrees(angle_offset):.0f}°")
+            self.state.set_log(f"🔄 SSG 조향 탐색: {self.ssg_best_direction} 방향")
+
+        # Phase 2: STEER (제자리 회전)
+        if self.ssg_phase == "steer":
+            steer_elapsed = time.time() - self.ssg_start_time
+            if steer_elapsed < ssg.STEER_SEC:
+                return {
+                    "moveWS": {"command": "STOP", "weight": 1.0},
+                    "moveAD": {"command": self.ssg_best_direction,
+                               "weight": ssg.STEER_WEIGHT},
+                    "fire": False
+                }
+            # → Phase 3 전환
+            self.ssg_phase = "go"
+            self.ssg_start_time = time.time()
+            print(f"🚗 SSG Phase3(GO): 전진 재개 ({self.ssg_best_direction} 방향)")
+            self.state.set_log(f"🚗 SSG 전진 재개")
+
+        # Phase 3: GO (전진)
+        if self.ssg_phase == "go":
+            go_elapsed = time.time() - self.ssg_start_time
+            if go_elapsed < ssg.GO_SEC:
+                return {
+                    "moveWS": {"command": "W", "weight": ssg.GO_WS_WEIGHT},
+                    "moveAD": {"command": self.ssg_best_direction,
+                               "weight": ssg.GO_AD_WEIGHT},
+                    "fire": False
+                }
+            # SSG 완료 → 정상 복귀
+            print("✅ SSG 완료! 정상 제어 복귀")
+            self.state.set_log("✅ 장애물 회피 완료, 정상 주행 복귀")
+            self.ssg_mode = False
+            self.ssg_phase = None
+            self.ssg_no_valid_count = 0
+            self.stuck_counter = 0
+            self.last_position = None
+            self.state.clear_path()  # 경로 재생성 유도
+            return self._stop_command()
+
+        # fallback
+        self.ssg_mode = False
+        return self._stop_command()
 
     # ==================== Stuck 감지/복구 ====================
     
