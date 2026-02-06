@@ -77,7 +77,7 @@ class Config:
             print("LiDAR 폴더 설정 완료!")
 
         # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
-        LIDAR_FOLDER = _set_lidar_folder(user="MSI")
+        LIDAR_FOLDER = _set_lidar_folder(user="soeao")
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -465,7 +465,8 @@ class TargetLockConfig:
     hold_sec: float = 5.0              # 잠금 유지 시간 (초)
     iou_thresh: float = 0.30           # IOU 임계값
     lost_grace_sec: float = 0.7        # 타겟 손실 유예 시간 (초)
-    
+    lock_delay: float = 0.6            # 락 확정 전 대기 시간 (초) - 이 시간 동안 타겟이 유지되어야 락을 검
+
     # LiDAR 기반 타겟 잠금
     enable_lidar_lock: bool = True     # LiDAR 잠금 활성화
     lock_duration: float = 10.0        # 잠금 지속 시간 (초)

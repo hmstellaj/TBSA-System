@@ -1542,8 +1542,55 @@ def detect_tank_only_track(
 
         return out
 
+def verify_target_stability(state, best_target, now, delay_sec):
+    """
+    [검증 로직] 타겟 락을 확정하기 전 일정 시간 동안 후보를 검증
+    
+    Args:
+        state: StateManager 인스턴스
+        best_target: 현재 프레임의 최적 타겟 후보 (select_best_target 결과)
+        now: 현재 시간
+        delay_sec: 검증 대기 시간 (config.lock_cfg.lock_delay)
+        
+    Returns:
+        bool: True면 '검증 통과(락 걸어도 됨)', False면 '아직 검증 중'
+    """
+    # 1. 후보가 없으면 검증 상태 초기화
+    if best_target is None:
+        if state.pending_tid is not None:
+            print(f"👋 [검증 취소] 타겟 소실")
+        state.pending_tid = None
+        state.pending_start_ts = 0.0
+        return False
+
+    curr_tid = best_target.get("track_id")
+    
+    # 2. Track ID가 없는 경우 (추적 불가) -> 검증 리셋
+    if curr_tid is None:
+        state.pending_tid = None
+        state.pending_start_ts = 0.0
+        return False
+
+    # 3. 새로운 타겟 후보가 나타난 경우 (ID 변경)
+    if state.pending_tid != curr_tid:
+        state.pending_tid = curr_tid
+        state.pending_start_ts = now
+        # 로그는 필요시 주석 해제
+        # print(f"🕵️ [검증 시작] 새로운 후보 ID:{curr_tid} (거리: {best_target.get('distance_m')}m)")
+        return False
+
+    # 4. 동일 타겟 유지 중 -> 시간 체크
+    elapsed = now - state.pending_start_ts
+    if elapsed >= delay_sec:
+        # 검증 시간 초과 -> 락 확정!
+        # 확정되었으므로 펜딩 상태는 초기화하지 않고, 외부(app.py)에서 locked_bbox 설정 시 자연스럽게 처리됨
+        return True
+    
+    # 아직 시간 부족
+    return False
+
 # =========================================================
-# 9. Lock-on 대상 선택
+# Lock-on 대상 선택
 # - 이전 locked_bbox가 있으면 IoU 기반으로 추적 느낌 유지
 # =========================================================
 def pick_lock_target_yolo_only(tank_candidates: list, prev_locked_bbox, iou_gate=0.15):

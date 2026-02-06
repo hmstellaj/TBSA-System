@@ -32,7 +32,7 @@ from PIL import Image, ImageDraw
 # ==============================================================================
 # 설정
 from config import (
-    Config, combat_config, sm_cfg,
+    Config, combat_config, sm_cfg,lock_cfg,
     camera_cfg, fusion_cfg, aim_cfg, turret_cfg
 )
 
@@ -63,7 +63,8 @@ from utils.combat_system import (
     detect_all_objects_dual,
     select_best_target, 
     check_target_lost, 
-    calculate_aim_errors
+    calculate_aim_errors,
+    verify_target_stability
 )
 
 # ==============================================================================
@@ -456,10 +457,48 @@ def handle_standby_mode(image_path, img_pil, state_manager, now):
         pass
     
     # 5. 타겟 잠금 및 상태 업데이트
-    if best is not None:
-        # 잠금 시작 시각 기록
+    # if best is not None:
+    #     # 잠금 시작 시각 기록
+    #     if state_manager.locked_bbox is None:
+    #         state_manager.locked_ts = now
+    # [수정 후] 검증 로직 적용
+    should_lock = False
+    
+    # 1. 이미 락이 걸려있는 상태라면? -> 계속 유지 (select_best_target이 이미 필터링함)
+    if state_manager.locked_bbox is not None:
+        should_lock = (best is not None)
+    
+    # 2. 락이 없는 상태라면? -> 검증(Verify) 시도
+    else:
+        # 검증 함수 호출
+        is_verified = verify_target_stability(
+            state_manager, 
+            best, 
+            now, 
+            lock_cfg.lock_delay  # config.py에서 설정한 시간
+        )
+        
+        if is_verified:
+            print(f"🎯 [검증 완료] 타겟 락 확정! ID:{best.get('track_id')}")
+            should_lock = True
+        elif best is not None:
+            # 아직 검증 중일 때 메시지 표시 (선택 사항)
+            elapsed = now - state_manager.pending_start_ts
+            state_manager.status_message = f"타겟 검증 중... {elapsed:.1f}s / {lock_cfg.lock_delay}s"
+
+    # 3. 락 실행 및 정보 업데이트
+    if should_lock and best is not None:
+        # 잠금 시작 시각 기록 (최초 1회)
         if state_manager.locked_bbox is None:
             state_manager.locked_ts = now
+            state_manager.locked_start_ts = now
+            state_manager.locked_tid = best.get("track_id")
+            # 락 걸리면 펜딩 상태 초기화
+            state_manager.pending_tid = None 
+            state_manager.pending_start_ts = 0.0
+
+
+
             state_manager.locked_start_ts = now
             state_manager.locked_tid = best.get("track_id")
         

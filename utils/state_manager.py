@@ -233,6 +233,10 @@ class StateManager:
 
         self.player_turret_x = 0.0
         self.player_body_x = 0.0
+        
+        # [추가] 타겟 락 검증용 상태 변수
+        self.pending_tid = None        # 검증 중인 타겟의 Track ID
+        self.pending_start_ts = 0.0    # 검증 시작 시간
     
     # ==================================================================
     # 주행 시스템 메서드
