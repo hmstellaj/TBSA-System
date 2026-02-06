@@ -74,14 +74,9 @@ class Config:
                 full_path = os.path.join(base_path, *sub)
                 if os.path.exists(full_path): return full_path
             
-            print("LiDAR 폴더 설정 완료!")
-
-        # 예시 LIDAR_FOLDER = set_lidar_folder(user="acorn")
-<<<<<<< HEAD
+        print("LiDAR 폴더 설정 완료!")
+        
         LIDAR_FOLDER = _set_lidar_folder(user="soeao")
-=======
-        LIDAR_FOLDER = _set_lidar_folder(user="user")
->>>>>>> 3b56e90ea3d716785ed63ceb3a0d13468e45b81b
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
