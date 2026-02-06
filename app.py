@@ -5,8 +5,7 @@ Flask 서버 메인 - SEQ 기반 통합 시스템
     SEQ 1: A* + PID 주행 (정적 장애물 회피)
     SEQ 2: YOLO + LiDAR 센서퓨전 전투 시스템
     SEQ 3: A* + PID 주행 (SEQ 1과 동일, 파라미터 다름)
-    SEQ 4: PPO + A* 하이브리드 주행 (동적 재계획)
-
+    SEQ 4: PPO + A* 하이브리드 자율주행
 [주요 기능]
     - 듀얼 YOLO 모델 (Cannon 전용 + 통합 객체 인식)
     - LiDAR + 이미지 센서 퓨전
