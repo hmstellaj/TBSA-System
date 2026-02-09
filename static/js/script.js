@@ -1,5 +1,6 @@
 /* script.js - 서버 생성 실시간 경로 이미지 방식 */
 let currentSeq = 1;
+let lastSeq = null;
 let lastLogMsg = "";
 let lastImageUpdate = 0;
 let lastPathImageUpdate = 0;
@@ -849,6 +850,15 @@ function refresh() {
         const banner = document.getElementById('msg-banner');
         banner.textContent = j.msg || "CONNECTED";
         const serverSeq = j.seq;
+
+        // [추가/수정] SEQ가 변경되었을 때 로그 초기화
+        if (lastSeq !== null && lastSeq !== serverSeq) {
+            console.log(`🔄 SEQ 변경 감지 (${lastSeq} -> ${serverSeq}): 로그 초기화`);
+            const logArea = document.getElementById('driving-log');
+            if (logArea) logArea.innerHTML = ''; // 로그 내용 비우기
+            lastLogMsg = ""; // 중복 방지 메시지도 초기화
+        }
+        lastSeq = serverSeq; // 현재 SEQ 업데이트
         
         document.querySelectorAll('.layout-content').forEach(l => l.classList.remove('active'));
         
@@ -879,7 +889,20 @@ function refresh() {
             combatModeDisplay.style.display = 'none';
         }
         
-        document.getElementById('position-panel').classList.toggle('hidden', serverSeq === 2);
+        if (j.tank_pose) {
+            const posText = `(${j.tank_pose[0].toFixed(1)}, ${j.tank_pose[1].toFixed(1)})`;
+            const el = document.getElementById('header-current-pos');
+            if (el) el.textContent = posText;
+        }
+        
+        if (j.destination) {
+            const destText = `(${j.destination[0].toFixed(1)}, ${j.destination[1].toFixed(1)})`;
+            const el = document.getElementById('header-dest-pos');
+            if (el) el.textContent = destText;
+        } else {
+            const el = document.getElementById('header-dest-pos');
+            if (el) el.textContent = '-';
+        }
         document.getElementById('destination-input').classList.toggle('active', serverSeq !== 2);
 
         // ═══════════════════════════════════════════════════════════════
@@ -927,8 +950,10 @@ function refresh() {
             // 로그 업데이트
             if (j.log && j.log !== lastLogMsg) {
                 const logArea = document.getElementById('driving-log');
-                logArea.innerHTML = `[${new Date().toLocaleTimeString()}] ${j.log}\n` + logArea.innerHTML;
-                lastLogMsg = j.log;
+                if (logArea) {
+                    logArea.innerHTML = `[${new Date().toLocaleTimeString()}] ${j.log}\n` + logArea.innerHTML;
+                    lastLogMsg = j.log;
+                }
             }
         } 
         // ═══════════════════════════════════════════════════════════════
@@ -1137,11 +1162,6 @@ function refresh() {
             // 데이터 업데이트
             SEQ4.updateData(j);
         }
-
-        // 공통 정보 업데이트
-        if (j.tank_pose) document.getElementById('current-pos').textContent = `(${j.tank_pose[0].toFixed(1)}, ${j.tank_pose[1].toFixed(1)})`;
-        if (j.destination) document.getElementById('destination-pos').textContent = `(${j.destination[0].toFixed(1)}, ${j.destination[1].toFixed(1)})`;
-        document.getElementById('path-nodes').textContent = j.path_nodes ? `${j.path_nodes}개` : '0';
     })
     .catch(err => {
         console.error('디버그 상태 오류:', err);
