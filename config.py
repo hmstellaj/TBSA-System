@@ -76,7 +76,7 @@ class Config:
             
         print("LiDAR 폴더 설정 완료!")
         
-        LIDAR_FOLDER = _set_lidar_folder(user="soeao")
+        LIDAR_FOLDER = _set_lidar_folder(user="MSI")
         LIDAR_FILE_PATTERN = "*.json"
         
         # 모니터링 설정
@@ -339,7 +339,7 @@ class Config:
     # 경로 추종 설정
     # ========================================
     LOOKAHEAD_DIST = 8.0      # 전방 주시 거리 (m) - SEQ 1, 3용
-    ARRIVAL_THRESHOLD = 7.0   # 도착 판단 거리 (m)
+    ARRIVAL_THRESHOLD = 8.0   # 도착 판단 거리 (m)
     MIN_TARGET_DIST = 2.0     # 최소 타겟 거리 (m)
     
     # ========================================
