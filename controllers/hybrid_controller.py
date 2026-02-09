@@ -182,7 +182,7 @@ class HybridController:
         
         if self.state.seq == 1:
             self.state.seq = 2
-            self.state.status_message = "🎯 SEQ 1 도착! 사격 시스템 가동 중..."
+            self.state.status_message = "🎯 정찰지 도착! 사격 시스템 가동 중..."
             self.state.clear_path()
             self.state.destination = None
             print("🔄 SEQ 1→2 전환")
@@ -190,10 +190,10 @@ class HybridController:
             
         elif self.state.seq == 3:
             self.state.seq = 4
-            self.state.status_message = "🚀 SEQ 3 도착! 순수 DWA 모드 활성화"
+            self.state.status_message = "🚀 경유지 도착! 자율주행 모드 활성화"
             self.state.clear_path()
             self.state.destination = None
-            print("🔄 SEQ 3→4 전환, 순수 DWA 시작")
+            print("🔄 SEQ 3→4 전환, 자율주행 시작")
             return self._stop_command()
             
         elif self.state.seq == 4:
