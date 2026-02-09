@@ -353,7 +353,7 @@ class VisualizationManager:
                 self.last_seq = self.state.seq
             
             # 위치가 조금이라도 변하면 기록 (중복 방지)
-            if not self.history_trail or np.hypot(self.history_trail[-1][0] - cx, self.history_trail[-1][1] - cz) > 0.5:
+            if not self.history_trail or np.hypot(self.history_trail[-1][0] - cx, self.history_trail[-1][1] - cz) > 0.1:
                 self.history_trail.append((cx, cz))  
 
             if len(self.history_trail) > 1:
