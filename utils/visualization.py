@@ -325,7 +325,7 @@ class VisualizationManager:
     def render_realtime_path_image(self, planner, image_size=(640, 640)):
         """
         실시간 경로 이미지 생성
-        - 전차: 크고 선명한 노란 테두리 화살표
+        - 전차: 크고 선명한 빨간색 동그라미
         - 경로: 실제 이동 궤적(회색 실선) + 남은 경로(파란 점선)
         """
 
@@ -459,7 +459,7 @@ class VisualizationManager:
             #                     zorder=10)            # 맨 위에 그림
             # ax.add_patch(tank_poly)
             tank_circle = Circle((cx, cz),
-                                 radius=6.0,
+                                 radius=4.0,
                                  facecolor='#D50000',
                                  edgecolor='#FFEA00',  # 형광 노랑 테두리
                                  linewidth=2.5,        # 두꺼운 테두리
