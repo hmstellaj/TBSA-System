@@ -904,7 +904,7 @@ class LidarLogger:
         self._cleanup_old_data()
     
     def _cleanup_old_data(self):
-        """실행 시 lidar_data 폴더 내의 이전 세션 JSON 파일들을 정리합니다."""
+        """실행 시 lidar_data 폴더 내의 이전 세션 JSON 파일 및 글로벌 경로 이미지를 정리합니다."""
         p = Path(self.lidar_folder)
         
         # 모든 파일 삭제
@@ -925,6 +925,19 @@ class LidarLogger:
                 print("✨ LiDAR 폴더가 이미 비어 있습니다.")
         except Exception as e:
             print(f"⚠️ 폴더 정리 중 오류 발생: {e}")
+        
+        try:
+            # 현재 작업 디렉토리 기준
+            root_path = Path('.')
+            target_images = ["SEQ 1_Global_Path.png", "SEQ 3_Global_Path.png"]
+
+            for image in target_images:
+                image_file = root_path / image
+                if image_file.exists():
+                    image_file.unlink()
+                    print(f"🗑️ 기존 경로 이미지 삭제됨: {image}")
+        except Exception as e:
+            print(f"⚠️ 이미지 삭제 중 오류 발생: {e}")
     
     def get_latest_dataframe(self):
         """메모리에서 최신 통합 LiDAR 데이터프레임 가져오기 (센서 퓨전용)"""
