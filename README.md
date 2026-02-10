@@ -62,7 +62,7 @@ project/
 | 이진진 |  | jj95lee@yonsei.ac.kr |
 | 김형규 |  | @sincerite0922 |
 | 박승훈 |  | tmdgns0213@gmail.com |
-| 이주혁 |  |  |
+| 이주혁 |  | juhyeok.lee0314@gmail.com |
 | 이진행 |  | @playlee1026-cyber |
 | 주현민 |  | @stellahmj |
 
